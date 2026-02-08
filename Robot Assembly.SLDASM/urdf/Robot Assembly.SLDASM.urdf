@@ -1,0 +1,399 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This URDF was automatically created by SolidWorks to URDF Exporter! Originally created by Stephen Brawner (brawner@gmail.com) 
+     Commit Version: 1.6.0-4-g7f85cfe  Build Version: 1.6.7995.38578
+     For more information, please see http://wiki.ros.org/sw_urdf_exporter -->
+<robot
+  name="Robot Assembly.SLDASM">
+  <link
+    name="base_link">
+    <inertial>
+      <origin
+        xyz="8.58979465109512E-08 -0.00786664554690289 -0.0416356125346336"
+        rpy="0 0 0" />
+      <mass
+        value="0.866068274339261" />
+      <inertia
+        ixx="0.00160294920364804"
+        ixy="5.83234576355506E-11"
+        ixz="9.46683645048633E-11"
+        iyy="0.0012864010593821"
+        iyz="-2.27415656960103E-05"
+        izz="0.0024092816751931" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://Robot Assembly.SLDASM/meshes/base_link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://Robot Assembly.SLDASM/meshes/base_link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <link
+    name="Link1">
+    <inertial>
+      <origin
+        xyz="-3.53659247852743E-09 1.1029199232725E-08 0.049581656173383"
+        rpy="0 0 0" />
+      <mass
+        value="0.251146740283358" />
+      <inertia
+        ixx="0.000120182678076128"
+        ixy="-2.87092106978595E-07"
+        ixz="-6.82137867912629E-12"
+        iyy="0.000126684930053564"
+        iyz="-1.46021818535244E-11"
+        izz="0.000108936136350425" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://Robot Assembly.SLDASM/meshes/Link1.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://Robot Assembly.SLDASM/meshes/Link1.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="Link1"
+    type="revolute">
+    <origin
+      xyz="0 0 -0.0243"
+      rpy="0 0 3.14159265358979" />
+    <parent
+      link="base_link" />
+    <child
+      link="Link1" />
+    <axis
+      xyz="0 0 -1" />
+    <limit
+      lower="0"
+      upper="5.235"
+      effort="1.5"
+      velocity="0" />
+  </joint>
+  <link
+    name="Link2_L">
+    <inertial>
+      <origin
+        xyz="0.0480450557748801 -0.0430211563667828 -0.106497815096565"
+        rpy="0 0 0" />
+      <mass
+        value="0.114015670147046" />
+      <inertia
+        ixx="7.59130966920322E-05"
+        ixy="3.3489777398038E-06"
+        ixz="-1.01432620112261E-06"
+        iyy="0.000153260029111437"
+        iyz="-1.96419517132456E-05"
+        izz="0.000109684194867983" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://Robot Assembly.SLDASM/meshes/Link2_L.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1 1 0.501960784313725 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://Robot Assembly.SLDASM/meshes/Link2_L.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="Link2_L"
+    type="revolute">
+    <origin
+      xyz="0.049712 0.0021909 0.0483"
+      rpy="3.1416 0 3.1416" />
+    <parent
+      link="Link1" />
+    <child
+      link="Link2_L" />
+    <axis
+      xyz="-0.99903 0.044029 0" />
+    <limit
+      lower="-6.2831"
+      upper="6.2831"
+      effort="6"
+      velocity="0" />
+    <mimic
+      joint="Link2_R"
+      multiplier="-1"
+      offset="0" />
+  </joint>
+  <link
+    name="Link2_R">
+    <inertial>
+      <origin
+        xyz="0.0511886488848695 -0.0389438177385629 0.10726865509522"
+        rpy="0 0 0" />
+      <mass
+        value="0.115260209448885" />
+      <inertia
+        ixx="7.59853961332835E-05"
+        ixy="-3.34751057862492E-06"
+        ixz="-1.01432761668096E-06"
+        iyy="0.000153299135269316"
+        iyz="1.96419158992854E-05"
+        izz="0.000109723316210421" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://Robot Assembly.SLDASM/meshes/Link2_R.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1 1 0.501960784313725 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://Robot Assembly.SLDASM/meshes/Link2_R.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="Link2_R"
+    type="revolute">
+    <origin
+      xyz="-0.049712 -0.0021909 0.0483"
+      rpy="0 0 0" />
+    <parent
+      link="Link1" />
+    <child
+      link="Link2_R" />
+    <axis
+      xyz="-0.99903 -0.044029 0" />
+    <limit
+      lower="-6.2831"
+      upper="6.2831"
+      effort="6"
+      velocity="0" />
+  </joint>
+  <link
+    name="Link3_Elb">
+    <inertial>
+      <origin
+        xyz="-0.0257820734479074 0.104304599331447 0.00761082903967863"
+        rpy="0 0 0" />
+      <mass
+        value="0.108578968896478" />
+      <inertia
+        ixx="6.59313253397546E-05"
+        ixy="1.84082006886436E-06"
+        ixz="4.77454680587105E-07"
+        iyy="3.79276297998002E-05"
+        iyz="-2.57333371923271E-06"
+        izz="7.41247034768146E-05" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://Robot Assembly.SLDASM/meshes/Link3_Elb.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.894117647058823 0.894117647058823 0.894117647058823 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://Robot Assembly.SLDASM/meshes/Link3_Elb.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="Link3_Elb"
+    type="revolute">
+    <origin
+      xyz="0.0310383069634694 -0.066960094356302 0.177892733029306"
+      rpy="0 0 3.14159265358979" />
+    <parent
+      link="Link2_R" />
+    <child
+      link="Link3_Elb" />
+    <axis
+      xyz="-0.999030239394349 -0.0440293172292141 0" />
+    <limit
+      lower="0"
+      upper="5.235"
+      effort="1.5"
+      velocity="0" />
+  </joint>
+  <link
+    name="Link4_Wr">
+    <inertial>
+      <origin
+        xyz="-0.0102345326246966 0.00193181876852697 -0.0141831718068818"
+        rpy="0 0 0" />
+      <mass
+        value="0.0544764465384712" />
+      <inertia
+        ixx="1.09952961600474E-05"
+        ixy="3.94969839500294E-07"
+        ixz="-1.66012663386694E-06"
+        iyy="1.6783428881388E-05"
+        iyz="8.412284597169E-08"
+        izz="1.59496083492357E-05" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://Robot Assembly.SLDASM/meshes/Link4_Wr.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.909803921568627 0.443137254901961 0.0313725490196078 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://Robot Assembly.SLDASM/meshes/Link4_Wr.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="Link4_Wr"
+    type="revolute">
+    <origin
+      xyz="-0.0296531353015106 0.179979598997993 -0.00825112788202617"
+      rpy="0 0 0" />
+    <parent
+      link="Link3_Elb" />
+    <child
+      link="Link4_Wr" />
+    <axis
+      xyz="0.00326531797448377 -0.074090437986641 0.99724618058806" />
+    <limit
+      lower="0"
+      upper="5.235"
+      effort="1.5"
+      velocity="0" />
+  </joint>
+  <link
+    name="Link5_EE">
+    <inertial>
+      <origin
+        xyz="0.0128972636076341 -0.0202698404650712 -0.00934520599844824"
+        rpy="0 0 0" />
+      <mass
+        value="0.00584101748230971" />
+      <inertia
+        ixx="2.58848266437046E-06"
+        ixy="-4.0037170042947E-08"
+        ixz="2.56388103727582E-07"
+        iyy="1.27312304405577E-06"
+        iyz="-1.4993850329412E-07"
+        izz="3.22626562972272E-06" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://Robot Assembly.SLDASM/meshes/Link5_EE.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://Robot Assembly.SLDASM/meshes/Link5_EE.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="Link5_EE"
+    type="revolute">
+    <origin
+      xyz="0.000276136875066923 0.0231417817590652 -0.0186376416276896"
+      rpy="0 0 0" />
+    <parent
+      link="Link4_Wr" />
+    <child
+      link="Link5_EE" />
+    <axis
+      xyz="-0.0157798539152307 -0.997131145987723 -0.0740302229607876" />
+    <limit
+      lower="0"
+      upper="5.235"
+      effort="1.5"
+      velocity="0" />
+  </joint>
+</robot>
