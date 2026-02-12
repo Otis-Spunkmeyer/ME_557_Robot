@@ -1,1 +1,1 @@
-controller_joint_names: ['', 'Link1', 'Link2_L', 'Link2_R', 'Link3_Elb', 'Link4_Wr', 'Link5_EE', ]
+controller_joint_names: ['', 'Motor1_joint', 'Motor2_L', 'Motor4_elb', 'Motor5_wr', 'Joint_EE', 'Motor3_R', ]
