@@ -1,6 +1,11 @@
 # ME557 Arduino Offline Playback
 
-This folder runs the pen path on Arduino without ROS at runtime.
+This folder is the offline ME557 firmware and trajectory data.
+
+Repository layout:
+
+- `online/`: ROS2 + MoveIt workspace.
+- `offline/`: Arduino firmware plus offline export/calibration tools.
 
 ## Files
 
@@ -11,28 +16,28 @@ This folder runs the pen path on Arduino without ROS at runtime.
 
 ## Export ACE trajectory
 
-From workspace root (`ME557_pen_arduino_ws`) with MoveIt running:
+From repo root (`ME557_pen_arduino_ws`) with online workspace already built:
 
 ```bash
 source /opt/ros/humble/setup.bash
-source install/setup.bash
+source online/install/setup.bash
 ROS_DOMAIN_ID=57 ROS_LOCALHOST_ONLY=1 \
-python3 tools/export_moveit_joint_trajectory.py \
+python3 offline/tools/export_moveit_joint_trajectory.py \
   --run-write-ace \
-  --output arduino/me557_pen_arduino_ws/ace_trajectory_data.h
+  --output offline/arduino/me557_pen_arduino_ws/ace_trajectory_data.h
 ```
 
 One-command offline export (launches MoveIt, exports, validates summary, then stops):
 
 ```bash
-tools/export_offline_ace.sh
+offline/tools/export_offline_ace.sh
 ```
 
 Useful options:
 
 ```bash
 # Strict 14" x 14" tip bounds on XZ
-tools/export_offline_ace.sh \
+offline/tools/export_offline_ace.sh \
   --workspace-enforce-x-bounds true \
   --workspace-x-min -0.1778 \
   --workspace-x-max 0.1778 \
@@ -40,7 +45,7 @@ tools/export_offline_ace.sh \
   --workspace-z-max 0.3556
 
 # Floor-only Z constraint, unbounded X for tip requests
-tools/export_offline_ace.sh \
+offline/tools/export_offline_ace.sh \
   --workspace-enforce-x-bounds false \
   --workspace-z-min 0.0 \
   --workspace-z-max 10.0
@@ -76,7 +81,7 @@ tools/export_offline_ace.sh \
 4. Compute constants:
 
 ```bash
-python3 tools/compute_moveit_calibration.py \
+python3 offline/tools/compute_moveit_calibration.py \
   --moveit-rad 0.00698 5.55596 -0.66950 0.18387 0.00524 \
   --logical-deg 180.4 179.2 181.1 179.7 180.3 \
   --sign 1 1 -1 1 1

@@ -1,25 +1,39 @@
 # ME557 Robot
 
-This repository contains both ME557 versions:
+This repository is split into two separate top-level structures:
 
-- Online version (ROS2 + MoveIt): `src/`
-- Offline version (Arduino playback): `arduino/`
+- Online version (ROS2 + MoveIt): `online/`
+- Offline version (Arduino playback): `offline/`
 
 ## Online Version
 
 The online stack uses ROS2/MoveIt packages for planning and control:
 
-- `src/me557_pen_description`
-- `src/me557_pen_moveit_config`
+- `online/src/me557_pen_description`
+- `online/src/me557_pen_moveit_config`
+- `online/cad/`
 
 ## Offline Version
 
 The offline stack runs trajectory playback on Arduino without ROS at runtime:
 
-- `arduino/me557_pen_arduino_ws/me557_pen_arduino_ws.ino`
-- `arduino/me557_pen_arduino_ws/ace_trajectory_data.h`
-- `arduino/README.md`
+- `offline/arduino/me557_pen_arduino_ws/me557_pen_arduino_ws.ino`
+- `offline/arduino/me557_pen_arduino_ws/ace_trajectory_data.h`
+- `offline/arduino/README.md`
+- `offline/tools/`
 
-## Tools
+## Quick Start
 
-Helper scripts for exporting and calibrating trajectories are in `tools/`.
+Build online workspace:
+
+```bash
+cd online
+source /opt/ros/humble/setup.bash
+colcon build
+```
+
+Generate offline trajectory header:
+
+```bash
+offline/tools/export_offline_ace.sh
+```

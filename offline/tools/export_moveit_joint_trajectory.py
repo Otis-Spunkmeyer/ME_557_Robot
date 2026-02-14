@@ -2,9 +2,9 @@
 """Capture one MoveIt run and write an Arduino trajectory header.
 
 Example:
-  python3 tools/export_moveit_joint_trajectory.py \
+  python3 offline/tools/export_moveit_joint_trajectory.py \
     --run-write-ace \
-    --output arduino/ace_trajectory_data.h
+    --output offline/arduino/me557_pen_arduino_ws/ace_trajectory_data.h
 """
 
 from __future__ import annotations
@@ -309,11 +309,17 @@ def write_header(samples: list[Sample], output: Path) -> None:
 
 
 def main() -> int:
+    default_output = (
+        Path(__file__).resolve().parents[1]
+        / "arduino"
+        / "me557_pen_arduino_ws"
+        / "ace_trajectory_data.h"
+    )
     p = argparse.ArgumentParser()
     p.add_argument("--topic", default="/write_arm_controller/joint_trajectory")
     p.add_argument("--controller-state-topic", default="/write_arm_controller/controller_state")
     p.add_argument("--display-topic", default="/display_planned_path")
-    p.add_argument("--output", default="arduino/ace_trajectory_data.h")
+    p.add_argument("--output", default=str(default_output))
     p.add_argument("--writer-log", default="/tmp/write_ace_last.log")
     p.add_argument("--run-write-ace", action="store_true")
     p.add_argument("--post-wait-sec", type=float, default=1.0)

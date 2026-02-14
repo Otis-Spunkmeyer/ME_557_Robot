@@ -2,16 +2,20 @@
 build/
 install/
 log/
+online/build/
+online/install/
+online/log/
 
 # Python cache
 __pycache__/
+**/__pycache__/
 *.pyc
 *.pyo
 *.pyd
 
 # Arduino / PlatformIO generated files
-arduino/.pio/
-arduino/.vscode/
+offline/arduino/.pio/
+offline/arduino/.vscode/
 
 # Local environment files
 .env

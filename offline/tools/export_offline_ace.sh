@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-workspace_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+offline_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+repo_root="$(cd "$offline_root/.." && pwd)"
+online_root="${ME557_ONLINE_WS:-$repo_root/online}"
 
 output="arduino/me557_pen_arduino_ws/ace_trajectory_data.h"
 writer_log="/tmp/write_ace_offline.log"
@@ -32,7 +34,7 @@ count_points() {
 
 usage() {
   cat <<'EOF'
-Usage: tools/export_offline_ace.sh [options]
+Usage: offline/tools/export_offline_ace.sh [options]
 
 Generates Arduino offline trajectory header using write_ace plan-only capture.
 
@@ -56,6 +58,8 @@ Options:
 
   --ros-domain-id N                 ROS_DOMAIN_ID (default: env or 57)
   --ros-localhost-only 0|1          ROS_LOCALHOST_ONLY (default: env or 1)
+  --online-root PATH                Online ROS workspace root
+                                    (default: ../online from this script)
   -h, --help                        Show this help
 EOF
 }
@@ -77,6 +81,7 @@ while [[ $# -gt 0 ]]; do
     --workspace-z-max) workspace_z_max="$2"; shift 2 ;;
     --ros-domain-id) ros_domain_id="$2"; shift 2 ;;
     --ros-localhost-only) ros_localhost_only="$2"; shift 2 ;;
+    --online-root) online_root="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *)
       echo "Unknown option: $1" >&2
@@ -94,14 +99,23 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-cd "$workspace_root"
+if [[ "$online_root" != /* ]]; then
+  online_root="$repo_root/$online_root"
+fi
+
+cd "$offline_root"
 mkdir -p /tmp/ros_home /tmp/ros_logs
 export ROS_HOME=/tmp/ros_home
 export ROS_LOG_DIR=/tmp/ros_logs
 
 set +u
 source /opt/ros/humble/setup.bash
-source install/setup.bash
+if [[ ! -f "$online_root/install/setup.bash" ]]; then
+  echo "Missing $online_root/install/setup.bash" >&2
+  echo "Build online workspace first: cd $online_root && colcon build" >&2
+  exit 1
+fi
+source "$online_root/install/setup.bash"
 set -u
 export ROS_DOMAIN_ID="$ros_domain_id"
 export ROS_LOCALHOST_ONLY="$ros_localhost_only"
@@ -153,7 +167,7 @@ fi
 if [[ "$output" = /* ]]; then
   output_file="$output"
 else
-  output_file="$workspace_root/$output"
+  output_file="$offline_root/$output"
 fi
 
 points=0

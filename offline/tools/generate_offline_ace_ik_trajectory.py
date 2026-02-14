@@ -232,7 +232,13 @@ def build_ace_semantic_plan():
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--output", default="arduino/me557_pen_arduino_ws/ace_trajectory_data.h")
+    default_output = (
+        Path(__file__).resolve().parents[1]
+        / "arduino"
+        / "me557_pen_arduino_ws"
+        / "ace_trajectory_data.h"
+    )
+    ap.add_argument("--output", default=str(default_output))
     ap.add_argument("--group", default="Write")
     ap.add_argument("--base-link", default="base_link")
     ap.add_argument("--tip-link", default="Pen_tip")
