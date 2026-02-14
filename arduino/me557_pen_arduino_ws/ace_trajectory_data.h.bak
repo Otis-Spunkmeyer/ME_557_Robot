@@ -1,0 +1,18 @@
+#pragma once
+#include <stdint.h>
+#include <stddef.h>
+
+typedef struct {
+  uint16_t dt_ms;
+  float j1_rad;
+  float j2l_rad;
+  float j4_rad;
+  float j5_rad;
+  float j6_rad;
+} MoveitJointSampleRad;
+
+static const MoveitJointSampleRad kAceMoveitTrajectory[] = {
+  { 120, -0.00002000f, 5.56987950f, -0.68872511f, 0.18900000f, -0.00025425f },
+};
+
+static const size_t kAceMoveitTrajectoryCount = sizeof(kAceMoveitTrajectory) / sizeof(kAceMoveitTrajectory[0]);

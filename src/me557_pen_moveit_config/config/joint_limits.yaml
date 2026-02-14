@@ -1,0 +1,21 @@
+joint_limits:
+  Motor1_joint:
+    has_velocity_limits: true
+    max_velocity: 6.18
+    has_acceleration_limits: false
+  Motor2_L:
+    has_velocity_limits: true
+    max_velocity: 6.6
+    has_acceleration_limits: false
+  Motor4_elb:
+    has_velocity_limits: true
+    max_velocity: 6.18
+    has_acceleration_limits: false
+  Motor5_wr:
+    has_velocity_limits: true
+    max_velocity: 6.18
+    has_acceleration_limits: false
+  Joint_EE:
+    has_velocity_limits: true
+    max_velocity: 6.18
+    has_acceleration_limits: false

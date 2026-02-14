@@ -1,0 +1,16 @@
+moveit_controller_manager: moveit_simple_controller_manager/MoveItSimpleControllerManager
+
+moveit_simple_controller_manager:
+  controller_names:
+    - write_arm_controller
+
+  write_arm_controller:
+    type: FollowJointTrajectory
+    action_ns: follow_joint_trajectory
+    default: true
+    joints:
+      - Motor1_joint
+      - Motor2_L
+      - Motor4_elb
+      - Motor5_wr
+      - Joint_EE

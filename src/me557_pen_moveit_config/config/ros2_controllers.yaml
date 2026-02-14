@@ -1,0 +1,28 @@
+controller_manager:
+  ros__parameters:
+    update_rate: 100
+    use_sim_time: false
+
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
+    write_arm_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+
+write_arm_controller:
+  ros__parameters:
+    joints:
+      - Motor1_joint
+      - Motor2_L
+      - Motor4_elb
+      - Motor5_wr
+      - Joint_EE
+    command_interfaces:
+      - position
+    state_interfaces:
+      - position
+      - velocity
+    allow_partial_joints_goal: false
+    constraints:
+      goal_time: 2.0
+      stopped_velocity_tolerance: 0.05

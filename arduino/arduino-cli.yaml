@@ -1,0 +1,6 @@
+board_manager:
+  additional_urls:
+    - https://raw.githubusercontent.com/ROBOTIS-GIT/OpenRB-150/master/package_openrb_index.json
+
+library:
+  enable_unsafe_install: true
