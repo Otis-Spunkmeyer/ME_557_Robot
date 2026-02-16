@@ -17,3 +17,9 @@ colcon build
 source install/setup.bash
 ros2 launch me557_pen_moveit_config demo.launch.py
 ```
+
+Run `write_ace` online with the same PlanningScene collision setup used by offline export:
+
+```bash
+ros2 launch me557_pen_moveit_config write_ace_online.launch.py use_rviz:=false
+```

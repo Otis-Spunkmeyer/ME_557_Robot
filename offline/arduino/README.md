@@ -13,6 +13,7 @@ Repository layout:
 - `me557_pen_arduino_ws/ace_trajectory_data.h`: exported MoveIt trajectory points.
 - `../tools/export_moveit_joint_trajectory.py`: captures trajectory from MoveIt and writes header.
 - `../tools/compute_moveit_calibration.py`: computes `MOVEIT_HOME_RAD` and `MOVEIT_DIR_SIGN`.
+- `../tools/generate_offline_ace_ik_trajectory.py`: legacy IK-only debug exporter (no collision-aware planning).
 
 ## Export ACE trajectory
 
@@ -33,6 +34,10 @@ One-command offline export (launches MoveIt, exports, validates summary, then st
 offline/tools/export_offline_ace.sh
 ```
 
+`export_offline_ace.sh` runs `write_ace` in plan-only mode, captures planned
+time-parameterized joint motion, and applies configured PlanningScene collision
+objects (board/table) before planning.
+
 Useful options:
 
 ```bash
@@ -49,6 +54,13 @@ offline/tools/export_offline_ace.sh \
   --workspace-enforce-x-bounds false \
   --workspace-z-min 0.0 \
   --workspace-z-max 10.0
+
+# Override board collision object used by planning scene setup
+offline/tools/export_offline_ace.sh \
+  --scene-board-center-y -0.420 \
+  --scene-board-center-z 0.230 \
+  --scene-board-size-x 0.50 \
+  --scene-board-size-z 0.42
 ```
 
 ## Arduino commands
