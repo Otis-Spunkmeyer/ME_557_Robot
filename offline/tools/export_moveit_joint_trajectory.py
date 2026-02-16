@@ -99,6 +99,17 @@ def parse_ace_summary(log_text: str) -> dict[str, int] | None:
     }
 
 
+def validate_time_parameterization(samples: list[Sample]) -> tuple[bool, str]:
+    if not samples:
+        return False, "no samples captured"
+    if any(int(s.dt_ms) <= 0 for s in samples):
+        return False, "one or more trajectory points have non-positive dt_ms"
+    total_ms = sum(int(s.dt_ms) for s in samples)
+    if total_ms <= 0:
+        return False, "trajectory duration is non-positive"
+    return True, f"total_duration_ms={total_ms}"
+
+
 def consume_writer_output(
     writer_proc: subprocess.Popen[str] | None,
     writer_log: Path,
@@ -336,6 +347,11 @@ def main() -> int:
     p.add_argument("--writer-align-orientation", choices=["true", "false"], default=None)
     p.add_argument("--writer-tolerance-position", type=float, default=None)
     p.add_argument("--writer-min-joint-span", type=float, default=None)
+    p.add_argument(
+        "--allow-nonplanned-fallback",
+        action="store_true",
+        help="Allow fallback to controller/joint-state sources when writer is used.",
+    )
     p.set_defaults(compress_holds=True)
     args = p.parse_args()
 
@@ -439,6 +455,17 @@ def main() -> int:
             ("controller_state", node.controller_state_samples),
             ("joint_states", node.joint_state_samples),
         ]
+        if args.run_write_ace and not args.allow_nonplanned_fallback:
+            candidates = [
+                c
+                for c in candidates
+                if c[0] in ("trajectory_topic", "display_planned_path")
+            ]
+            node.get_logger().info(
+                "Using planned trajectory sources only "
+                "(trajectory_topic/display_planned_path)."
+            )
+
         scored = []
         for name, data in candidates:
             raw_n = len(data)
@@ -469,6 +496,11 @@ def main() -> int:
         node.get_logger().info(
             f"Unique trajectory points after compression: {unique_after}"
         )
+        timing_ok, timing_info = validate_time_parameterization(selected_samples)
+        if timing_ok:
+            node.get_logger().info(f"Timing validation passed: {timing_info}")
+        else:
+            node.get_logger().error(f"Timing validation failed: {timing_info}")
 
         if args.run_write_ace and writer_exit_code not in (None, 0):
             node.get_logger().error(
@@ -509,6 +541,11 @@ def main() -> int:
 
         if not selected_samples:
             node.get_logger().error("No samples captured; header not written.")
+            rc = 1
+        elif not timing_ok:
+            node.get_logger().error(
+                "Trajectory timing is invalid; header not written."
+            )
             rc = 1
         elif incomplete_ace:
             node.get_logger().error(

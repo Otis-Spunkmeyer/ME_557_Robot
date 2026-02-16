@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate a full offline ACE trajectory header via MoveIt IK (no execution required)."""
+"""Legacy debug tool: generate ACE joint samples via IK only (no motion planning)."""
 
 from __future__ import annotations
 
@@ -257,6 +257,10 @@ def main() -> int:
     rclpy.init()
     node = AceIkExporter(args.group, args.base_link, args.tip_link)
     try:
+        node.get_logger().warn(
+            "This exporter is IK-only and does not produce collision-aware motion plans. "
+            "Use write_ace/export_offline_ace.sh for planning-safe trajectories."
+        )
         node.wait_ready()
         anchor_xyz, anchor_q = node.current_tip_pose()
         quat_bank = orientation_candidates(anchor_q)

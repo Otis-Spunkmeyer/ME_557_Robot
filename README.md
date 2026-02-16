@@ -37,3 +37,6 @@ Generate offline trajectory header:
 ```bash
 offline/tools/export_offline_ace.sh
 ```
+
+This export path uses MoveIt planning (`write_ace`) and applies configured
+PlanningScene collision objects before planning.

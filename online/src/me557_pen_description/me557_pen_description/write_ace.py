@@ -6,12 +6,15 @@ from threading import Thread
 from pathlib import Path
 
 import rclpy
-from geometry_msgs.msg import Point
+from geometry_msgs.msg import Point, Pose
+from moveit_msgs.msg import CollisionObject, PlanningScene
+from moveit_msgs.srv import ApplyPlanningScene
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.duration import Duration
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile
+from shape_msgs.msg import SolidPrimitive
 from tf2_ros import Buffer, TransformException, TransformListener
 from visualization_msgs.msg import Marker
 
@@ -74,6 +77,26 @@ class AceWriter(Node):
             "trajectory_header_output",
             "arduino/me557_pen_arduino_ws/ace_trajectory_data.h",
         )
+        self.declare_parameter("scene_setup_enabled", False)
+        self.declare_parameter("scene_setup_timeout_sec", 5.0)
+        self.declare_parameter("apply_planning_scene_service", "/apply_planning_scene")
+        self.declare_parameter("scene_frame_id", "")
+        self.declare_parameter("scene_board_enabled", True)
+        self.declare_parameter("scene_board_id", "ace_board")
+        self.declare_parameter("scene_board_center_x", 0.0)
+        self.declare_parameter("scene_board_center_y", -0.42)
+        self.declare_parameter("scene_board_center_z", inch(8.0))
+        self.declare_parameter("scene_board_size_x", 0.50)
+        self.declare_parameter("scene_board_size_y", 0.01)
+        self.declare_parameter("scene_board_size_z", 0.40)
+        self.declare_parameter("scene_table_enabled", False)
+        self.declare_parameter("scene_table_id", "ace_table")
+        self.declare_parameter("scene_table_center_x", 0.0)
+        self.declare_parameter("scene_table_center_y", -0.34)
+        self.declare_parameter("scene_table_center_z", 0.10)
+        self.declare_parameter("scene_table_size_x", 0.60)
+        self.declare_parameter("scene_table_size_y", 0.60)
+        self.declare_parameter("scene_table_size_z", 0.05)
 
         joint_names = list(self.get_parameter("joint_names").value)
         base_link_name = str(self.get_parameter("base_link_name").value)
@@ -123,6 +146,38 @@ class AceWriter(Node):
         self.trajectory_header_output = str(
             self.get_parameter("trajectory_header_output").value
         )
+        self.scene_setup_enabled = bool(self.get_parameter("scene_setup_enabled").value)
+        self.scene_setup_timeout_sec = float(
+            self.get_parameter("scene_setup_timeout_sec").value
+        )
+        self.apply_planning_scene_service = str(
+            self.get_parameter("apply_planning_scene_service").value
+        )
+        self.scene_frame_id = str(self.get_parameter("scene_frame_id").value).strip()
+        self.scene_board_enabled = bool(self.get_parameter("scene_board_enabled").value)
+        self.scene_board_id = str(self.get_parameter("scene_board_id").value)
+        self.scene_board_center = (
+            float(self.get_parameter("scene_board_center_x").value),
+            float(self.get_parameter("scene_board_center_y").value),
+            float(self.get_parameter("scene_board_center_z").value),
+        )
+        self.scene_board_size = (
+            float(self.get_parameter("scene_board_size_x").value),
+            float(self.get_parameter("scene_board_size_y").value),
+            float(self.get_parameter("scene_board_size_z").value),
+        )
+        self.scene_table_enabled = bool(self.get_parameter("scene_table_enabled").value)
+        self.scene_table_id = str(self.get_parameter("scene_table_id").value)
+        self.scene_table_center = (
+            float(self.get_parameter("scene_table_center_x").value),
+            float(self.get_parameter("scene_table_center_y").value),
+            float(self.get_parameter("scene_table_center_z").value),
+        )
+        self.scene_table_size = (
+            float(self.get_parameter("scene_table_size_x").value),
+            float(self.get_parameter("scene_table_size_y").value),
+            float(self.get_parameter("scene_table_size_z").value),
+        )
         self.base_link_name = base_link_name
         self.end_effector_name = end_effector_name
         self._expected_joints = [
@@ -168,7 +223,8 @@ class AceWriter(Node):
             f"fallback_noncart={self.fallback_to_noncartesian} "
             f"align_ori={self.align_orientation_to_current_pose} "
             f"min_joint_span={self.min_joint_span_rad:g} "
-            f"plan_only={self.plan_only_capture}"
+            f"plan_only={self.plan_only_capture} "
+            f"scene_setup={self.scene_setup_enabled}"
         )
 
         self.callback_group = ReentrantCallbackGroup()
@@ -182,27 +238,32 @@ class AceWriter(Node):
         )
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self, spin_thread=False)
+        self._planning_scene_client = self.create_client(
+            ApplyPlanningScene, self.apply_planning_scene_service
+        )
 
         # Run a background executor so action/service callbacks are processed.
         self._executor = MultiThreadedExecutor(num_threads=2)
         self._executor.add_node(self)
         self._executor_thread = Thread(target=self._executor.spin, daemon=True)
         self._executor_thread.start()
-        if not self.plan_only_capture:
-            try:
+        try:
+            if self.scene_setup_enabled:
+                self._apply_configured_planning_scene()
+            if not self.plan_only_capture:
                 self._ensure_single_execute_trajectory_server()
+        except Exception:
+            # If startup validation fails, cleanly stop background spinning
+            # before re-raising so process exits without abort noise.
+            try:
+                self._executor.shutdown(timeout_sec=1.0)
             except Exception:
-                # If startup validation fails, cleanly stop background spinning
-                # before re-raising so process exits without abort noise.
-                try:
-                    self._executor.shutdown(timeout_sec=1.0)
-                except Exception:
-                    pass
-                try:
-                    self.destroy_node()
-                except Exception:
-                    pass
-                raise
+                pass
+            try:
+                self.destroy_node()
+            except Exception:
+                pass
+            raise
 
         marker_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.marker_pub = self.create_publisher(
@@ -318,6 +379,106 @@ class AceWriter(Node):
                 time.sleep(0.05)
         return None
 
+    @staticmethod
+    def _build_box(
+        object_id: str,
+        frame_id: str,
+        center_xyz,
+        size_xyz,
+    ) -> CollisionObject:
+        if any(v <= 0.0 for v in size_xyz):
+            raise ValueError(
+                f"Collision box '{object_id}' has non-positive dimensions: {size_xyz}"
+            )
+
+        box = CollisionObject()
+        box.header.frame_id = frame_id
+        box.id = object_id
+        box.operation = CollisionObject.ADD
+
+        primitive = SolidPrimitive()
+        primitive.type = SolidPrimitive.BOX
+        primitive.dimensions = [float(size_xyz[0]), float(size_xyz[1]), float(size_xyz[2])]
+
+        pose = Pose()
+        pose.position.x = float(center_xyz[0])
+        pose.position.y = float(center_xyz[1])
+        pose.position.z = float(center_xyz[2])
+        pose.orientation.w = 1.0
+
+        box.primitives.append(primitive)
+        box.primitive_poses.append(pose)
+        return box
+
+    def _apply_configured_planning_scene(self) -> None:
+        frame_id = self.scene_frame_id if self.scene_frame_id else self.base_link_name
+        objects = []
+        if self.scene_board_enabled:
+            objects.append(
+                self._build_box(
+                    object_id=self.scene_board_id,
+                    frame_id=frame_id,
+                    center_xyz=self.scene_board_center,
+                    size_xyz=self.scene_board_size,
+                )
+            )
+        if self.scene_table_enabled:
+            objects.append(
+                self._build_box(
+                    object_id=self.scene_table_id,
+                    frame_id=frame_id,
+                    center_xyz=self.scene_table_center,
+                    size_xyz=self.scene_table_size,
+                )
+            )
+
+        if not objects:
+            self.get_logger().warn(
+                "scene_setup_enabled=true but no collision objects are enabled."
+            )
+            return
+
+        if not self._planning_scene_client.wait_for_service(
+            timeout_sec=self.scene_setup_timeout_sec
+        ):
+            raise RuntimeError(
+                "Planning scene service not available on "
+                f"'{self.apply_planning_scene_service}' within "
+                f"{self.scene_setup_timeout_sec:.1f}s."
+            )
+
+        req = ApplyPlanningScene.Request()
+        req.scene = PlanningScene()
+        req.scene.is_diff = True
+        req.scene.world.collision_objects = objects
+
+        fut = self._planning_scene_client.call_async(req)
+        deadline = time.monotonic() + self.scene_setup_timeout_sec
+        while time.monotonic() < deadline:
+            if fut.done():
+                break
+            time.sleep(0.05)
+
+        if not fut.done():
+            raise RuntimeError(
+                "Timed out while waiting for planning scene application response."
+            )
+
+        if fut.exception() is not None:
+            raise RuntimeError(
+                f"Planning scene service call failed: {type(fut.exception()).__name__}: "
+                f"{fut.exception()}"
+            )
+
+        resp = fut.result()
+        if resp is None or not resp.success:
+            raise RuntimeError("MoveIt rejected planning scene collision object update.")
+
+        self.get_logger().info(
+            "Applied planning scene collision objects: "
+            + ", ".join(obj.id for obj in objects)
+        )
+
     def _plan_pose(self, x: float, y: float, z: float, cartesian: bool):
         # With orientation disabled, use a position-only request.
         # Some cartesian plan calls raise instead of returning None.
@@ -413,22 +574,34 @@ class AceWriter(Node):
         if index is None:
             return
 
-        for i, pt in enumerate(traj.points):
+        if not traj.points:
+            return
+
+        # Trajectory segments restart time_from_start at zero. Drop the repeated
+        # first point for subsequent segments and keep MoveIt's segment timing.
+        start_idx = 0 if not self._captured_samples else 1
+        if start_idx >= len(traj.points):
+            return
+
+        for i in range(start_idx, len(traj.points)):
+            pt = traj.points[i]
             vals = [float(pt.positions[j]) for j in index]
             if i == 0:
                 dt_ms = 120 if not self._captured_samples else 60
             else:
                 t0 = traj.points[i - 1].time_from_start
                 t1 = pt.time_from_start
+                dt_ns = (t1.sec - t0.sec) * 1_000_000_000 + (t1.nanosec - t0.nanosec)
+                if dt_ns <= 0:
+                    raise RuntimeError(
+                        "Planner returned non-increasing time_from_start values."
+                    )
                 dt_ms = int(
                     max(
                         20,
                         min(
                             2000,
-                            round(
-                                ((t1.sec - t0.sec) * 1e9 + (t1.nanosec - t0.nanosec))
-                                / 1e6
-                            ),
+                            round(dt_ns / 1e6),
                         ),
                     )
                 )

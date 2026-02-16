@@ -22,6 +22,24 @@ workspace_x_max="0.1778"
 workspace_z_min="0.0"
 workspace_z_max="10.0"
 
+scene_setup_enabled="true"
+scene_board_enabled="true"
+scene_board_id="ace_board"
+scene_board_center_x="0.0"
+scene_board_center_y="-0.415"
+scene_board_center_z="0.2286"
+scene_board_size_x="0.45"
+scene_board_size_y="0.01"
+scene_board_size_z="0.40"
+scene_table_enabled="false"
+scene_table_id="ace_table"
+scene_table_center_x="0.0"
+scene_table_center_y="-0.34"
+scene_table_center_z="0.10"
+scene_table_size_x="0.60"
+scene_table_size_y="0.60"
+scene_table_size_z="0.05"
+
 ros_domain_id="${ROS_DOMAIN_ID:-57}"
 ros_localhost_only="${ROS_LOCALHOST_ONLY:-1}"
 
@@ -56,6 +74,24 @@ Options:
   --workspace-z-min FLOAT           workspace_z_min (default: 0.0)
   --workspace-z-max FLOAT           workspace_z_max (default: 10.0)
 
+  --scene-setup-enabled true|false  Apply PlanningScene collision objects (default: true)
+  --scene-board-enabled true|false  Enable board collision object (default: true)
+  --scene-board-id NAME             Board object id (default: ace_board)
+  --scene-board-center-x FLOAT      Board center x in scene frame (default: 0.0)
+  --scene-board-center-y FLOAT      Board center y in scene frame (default: -0.415)
+  --scene-board-center-z FLOAT      Board center z in scene frame (default: 0.2286)
+  --scene-board-size-x FLOAT        Board size x (default: 0.45)
+  --scene-board-size-y FLOAT        Board size y (default: 0.01)
+  --scene-board-size-z FLOAT        Board size z (default: 0.40)
+  --scene-table-enabled true|false  Enable table collision object (default: false)
+  --scene-table-id NAME             Table object id (default: ace_table)
+  --scene-table-center-x FLOAT      Table center x in scene frame (default: 0.0)
+  --scene-table-center-y FLOAT      Table center y in scene frame (default: -0.34)
+  --scene-table-center-z FLOAT      Table center z in scene frame (default: 0.10)
+  --scene-table-size-x FLOAT        Table size x (default: 0.60)
+  --scene-table-size-y FLOAT        Table size y (default: 0.60)
+  --scene-table-size-z FLOAT        Table size z (default: 0.05)
+
   --ros-domain-id N                 ROS_DOMAIN_ID (default: env or 57)
   --ros-localhost-only 0|1          ROS_LOCALHOST_ONLY (default: env or 1)
   --online-root PATH                Online ROS workspace root
@@ -79,6 +115,23 @@ while [[ $# -gt 0 ]]; do
     --workspace-x-max) workspace_x_max="$2"; shift 2 ;;
     --workspace-z-min) workspace_z_min="$2"; shift 2 ;;
     --workspace-z-max) workspace_z_max="$2"; shift 2 ;;
+    --scene-setup-enabled) scene_setup_enabled="$2"; shift 2 ;;
+    --scene-board-enabled) scene_board_enabled="$2"; shift 2 ;;
+    --scene-board-id) scene_board_id="$2"; shift 2 ;;
+    --scene-board-center-x) scene_board_center_x="$2"; shift 2 ;;
+    --scene-board-center-y) scene_board_center_y="$2"; shift 2 ;;
+    --scene-board-center-z) scene_board_center_z="$2"; shift 2 ;;
+    --scene-board-size-x) scene_board_size_x="$2"; shift 2 ;;
+    --scene-board-size-y) scene_board_size_y="$2"; shift 2 ;;
+    --scene-board-size-z) scene_board_size_z="$2"; shift 2 ;;
+    --scene-table-enabled) scene_table_enabled="$2"; shift 2 ;;
+    --scene-table-id) scene_table_id="$2"; shift 2 ;;
+    --scene-table-center-x) scene_table_center_x="$2"; shift 2 ;;
+    --scene-table-center-y) scene_table_center_y="$2"; shift 2 ;;
+    --scene-table-center-z) scene_table_center_z="$2"; shift 2 ;;
+    --scene-table-size-x) scene_table_size_x="$2"; shift 2 ;;
+    --scene-table-size-y) scene_table_size_y="$2"; shift 2 ;;
+    --scene-table-size-z) scene_table_size_z="$2"; shift 2 ;;
     --ros-domain-id) ros_domain_id="$2"; shift 2 ;;
     --ros-localhost-only) ros_localhost_only="$2"; shift 2 ;;
     --online-root) online_root="$2"; shift 2 ;;
@@ -136,6 +189,23 @@ timeout "${timeout_sec}s" ros2 run me557_pen_description write_ace --ros-args \
   -p workspace_x_max:="$workspace_x_max" \
   -p workspace_z_min:="$workspace_z_min" \
   -p workspace_z_max:="$workspace_z_max" \
+  -p scene_setup_enabled:="$scene_setup_enabled" \
+  -p scene_board_enabled:="$scene_board_enabled" \
+  -p scene_board_id:="$scene_board_id" \
+  -p scene_board_center_x:="$scene_board_center_x" \
+  -p scene_board_center_y:="$scene_board_center_y" \
+  -p scene_board_center_z:="$scene_board_center_z" \
+  -p scene_board_size_x:="$scene_board_size_x" \
+  -p scene_board_size_y:="$scene_board_size_y" \
+  -p scene_board_size_z:="$scene_board_size_z" \
+  -p scene_table_enabled:="$scene_table_enabled" \
+  -p scene_table_id:="$scene_table_id" \
+  -p scene_table_center_x:="$scene_table_center_x" \
+  -p scene_table_center_y:="$scene_table_center_y" \
+  -p scene_table_center_z:="$scene_table_center_z" \
+  -p scene_table_size_x:="$scene_table_size_x" \
+  -p scene_table_size_y:="$scene_table_size_y" \
+  -p scene_table_size_z:="$scene_table_size_z" \
   -p trajectory_header_output:="$output" \
   >"$writer_log" 2>&1
 rc=$?
