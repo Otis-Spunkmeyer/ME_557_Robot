@@ -14,3 +14,10 @@ moveit_simple_controller_manager:
       - Motor4_elb
       - Motor5_wr
       - Joint_EE
+
+# Reduce false execution aborts when controller motion takes longer than
+# nominal planned duration on short, dense segment sequences.
+trajectory_execution:
+  allowed_execution_duration_scaling: 4.0
+  allowed_goal_duration_margin: 2.0
+  allowed_start_tolerance: 0.12

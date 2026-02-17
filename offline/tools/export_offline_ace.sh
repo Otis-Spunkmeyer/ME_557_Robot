@@ -13,8 +13,9 @@ wait_sec=7
 timeout_sec=120
 use_rviz="false"
 
-relative_to_current="true"
-relative_scale="0.02"
+relative_to_current="false"
+relative_scale="1.0"
+semantic_yaw_deg="90.0"
 
 workspace_enforce_x_bounds="false"
 workspace_x_min="-0.1778"
@@ -25,11 +26,11 @@ workspace_z_max="10.0"
 scene_setup_enabled="true"
 scene_board_enabled="true"
 scene_board_id="ace_board"
-scene_board_center_x="0.0"
-scene_board_center_y="-0.415"
+scene_board_center_x="0.415"
+scene_board_center_y="0.0"
 scene_board_center_z="0.2286"
-scene_board_size_x="0.45"
-scene_board_size_y="0.01"
+scene_board_size_x="0.01"
+scene_board_size_y="0.45"
 scene_board_size_z="0.40"
 scene_table_enabled="false"
 scene_table_id="ace_table"
@@ -65,8 +66,9 @@ Options:
   --timeout-sec N                   Timeout for write_ace run (default: 120)
   --use-rviz true|false             Launch RViz (default: false)
 
-  --relative-to-current true|false  relative_to_current_pose (default: true)
-  --relative-scale FLOAT            relative_scale (default: 0.02)
+  --relative-to-current true|false  relative_to_current_pose (default: false)
+  --relative-scale FLOAT            relative_scale (default: 1.0)
+  --semantic-yaw-deg FLOAT          semantic_yaw_deg (default: 90.0)
 
   --workspace-enforce-x-bounds true|false  Clamp tip X to bounds (default: false)
   --workspace-x-min FLOAT           workspace_x_min (default: -0.1778)
@@ -77,11 +79,11 @@ Options:
   --scene-setup-enabled true|false  Apply PlanningScene collision objects (default: true)
   --scene-board-enabled true|false  Enable board collision object (default: true)
   --scene-board-id NAME             Board object id (default: ace_board)
-  --scene-board-center-x FLOAT      Board center x in scene frame (default: 0.0)
-  --scene-board-center-y FLOAT      Board center y in scene frame (default: -0.415)
+  --scene-board-center-x FLOAT      Board center x in scene frame (default: 0.415)
+  --scene-board-center-y FLOAT      Board center y in scene frame (default: 0.0)
   --scene-board-center-z FLOAT      Board center z in scene frame (default: 0.2286)
-  --scene-board-size-x FLOAT        Board size x (default: 0.45)
-  --scene-board-size-y FLOAT        Board size y (default: 0.01)
+  --scene-board-size-x FLOAT        Board size x (default: 0.01)
+  --scene-board-size-y FLOAT        Board size y (default: 0.45)
   --scene-board-size-z FLOAT        Board size z (default: 0.40)
   --scene-table-enabled true|false  Enable table collision object (default: false)
   --scene-table-id NAME             Table object id (default: ace_table)
@@ -110,6 +112,7 @@ while [[ $# -gt 0 ]]; do
     --use-rviz) use_rviz="$2"; shift 2 ;;
     --relative-to-current) relative_to_current="$2"; shift 2 ;;
     --relative-scale) relative_scale="$2"; shift 2 ;;
+    --semantic-yaw-deg) semantic_yaw_deg="$2"; shift 2 ;;
     --workspace-enforce-x-bounds) workspace_enforce_x_bounds="$2"; shift 2 ;;
     --workspace-x-min) workspace_x_min="$2"; shift 2 ;;
     --workspace-x-max) workspace_x_max="$2"; shift 2 ;;
@@ -184,6 +187,7 @@ timeout "${timeout_sec}s" ros2 run me557_pen_description write_ace --ros-args \
   -p plan_only_capture:=true \
   -p relative_to_current_pose:="$relative_to_current" \
   -p relative_scale:="$relative_scale" \
+  -p semantic_yaw_deg:="$semantic_yaw_deg" \
   -p workspace_enforce_x_bounds:="$workspace_enforce_x_bounds" \
   -p workspace_x_min:="$workspace_x_min" \
   -p workspace_x_max:="$workspace_x_max" \

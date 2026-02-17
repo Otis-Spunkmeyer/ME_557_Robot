@@ -342,6 +342,7 @@ def main() -> int:
     p.add_argument("--writer-fraction-threshold", type=float, default=None)
     p.add_argument("--writer-min-points", type=int, default=None)
     p.add_argument("--writer-relative-scale", type=float, default=None)
+    p.add_argument("--writer-semantic-yaw-deg", type=float, default=None)
     p.add_argument("--writer-cartesian", choices=["true", "false"], default=None)
     p.add_argument("--writer-fallback-noncartesian", choices=["true", "false"], default=None)
     p.add_argument("--writer-align-orientation", choices=["true", "false"], default=None)
@@ -377,6 +378,8 @@ def main() -> int:
                 ros_args += ["-p", f"min_trajectory_points:={args.writer_min_points}"]
             if args.writer_relative_scale is not None:
                 ros_args += ["-p", f"relative_scale:={args.writer_relative_scale}"]
+            if args.writer_semantic_yaw_deg is not None:
+                ros_args += ["-p", f"semantic_yaw_deg:={args.writer_semantic_yaw_deg}"]
             if args.writer_cartesian is not None:
                 ros_args += ["-p", f"cartesian:={args.writer_cartesian}"]
             if args.writer_fallback_noncartesian is not None:

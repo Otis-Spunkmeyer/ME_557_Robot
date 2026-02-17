@@ -57,10 +57,16 @@ offline/tools/export_offline_ace.sh \
 
 # Override board collision object used by planning scene setup
 offline/tools/export_offline_ace.sh \
-  --scene-board-center-y -0.420 \
+  --scene-board-center-x 0.415 \
+  --scene-board-center-y 0.000 \
   --scene-board-center-z 0.230 \
-  --scene-board-size-x 0.50 \
+  --scene-board-size-x 0.01 \
+  --scene-board-size-y 0.45 \
   --scene-board-size-z 0.42
+
+# Rotate ACE path in board plane (+90 deg CCW about Z)
+offline/tools/export_offline_ace.sh \
+  --semantic-yaw-deg 90.0
 ```
 
 ## Arduino commands
