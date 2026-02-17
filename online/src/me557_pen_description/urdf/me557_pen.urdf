@@ -1,463 +1,235 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- This URDF was automatically created by SolidWorks to URDF Exporter! Originally created by Stephen Brawner (brawner@gmail.com) 
-     Commit Version: 1.6.0-4-g7f85cfe  Build Version: 1.6.7995.38578
-     For more information, please see http://wiki.ros.org/sw_urdf_exporter -->
-<robot
-  name="me557_pen">
-  <link
-    name="base_link">
+<?xml version='1.0' encoding='utf-8'?>
+<robot name="me557_pen">
+  <link name="base_link">
     <inertial>
-      <origin
-        xyz="1.8682E-10 0.009705 0.024833"
-        rpy="0 0 0" />
-      <mass
-        value="0.70117" />
-      <inertia
-        ixx="0.0014339"
-        ixy="-4.486E-11"
-        ixz="-5.7926E-11"
-        iyy="0.0011174"
-        iyz="2.2742E-05"
-        izz="0.002074" />
+      <origin xyz="-0.008662 6.915E-09 0.034203" rpy="0 0 0" />
+      <mass value="0.49574" />
+      <inertia ixx="0.0011079" ixy="1.4362E-10" ixz="-3.7324E-05" iyy="0.0011344" iyz="-8.7399E-11" izz="0.0016547" />
     </inertial>
     <visual>
-      <origin
-        xyz="0 0 0"
-        rpy="0 0 0" />
+      <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh
-          filename="package://me557_pen_description/meshes/base_link.STL" />
+        <mesh filename="package://me557_pen_description/meshes/base_link.STL" />
       </geometry>
-      <material
-        name="">
-        <color
-          rgba="1 1 1 1" />
+      <material name="">
+        <color rgba="0.79216 0.81961 0.93333 1" />
       </material>
     </visual>
     <collision>
-      <origin
-        xyz="0 0 0"
-        rpy="0 0 0" />
+      <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh
-          filename="package://me557_pen_description/meshes/base_link.STL" />
+        <mesh filename="package://me557_pen_description/meshes/base_link.STL" />
       </geometry>
     </collision>
   </link>
-  <link
-    name="floor">
+  <link name="floor">
     <visual>
-      <origin
-        xyz="0 0 0"
-        rpy="0 0 0" />
+      <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
         <box size="2.0 2.0 0.02" />
       </geometry>
-      <material
-        name="floor_gray">
-        <color
-          rgba="0.45 0.45 0.45 1" />
+      <material name="floor_gray">
+        <color rgba="0.45 0.45 0.45 1" />
       </material>
     </visual>
     <collision>
-      <origin
-        xyz="0 0 0"
-        rpy="0 0 0" />
+      <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
         <box size="2.0 2.0 0.02" />
       </geometry>
     </collision>
   </link>
-  <joint
-    name="base_to_floor"
-    type="fixed">
-    <origin
-      xyz="0 -0.91 -0.01"
-      rpy="0 0 0" />
-    <parent
-      link="base_link" />
-    <child
-      link="floor" />
-  </joint>
-  <link
-    name="Link1">
+  <link name="Link1">
     <inertial>
-      <origin
-        xyz="-4.1458E-11 1.3953E-08 0.048592"
-        rpy="0 0 0" />
-      <mass
-        value="0.25963" />
-      <inertia
-        ixx="0.00012884"
-        ixy="-7.389E-08"
-        ixz="-7.0214E-12"
-        iyy="0.00013537"
-        iyz="-1.3274E-11"
-        izz="0.00012613" />
+      <origin xyz="-1.0615E-08 1.3952E-09 0.05044" rpy="0 0 0" />
+      <mass value="0.24905" />
+      <inertia ixx="0.00030195" ixy="6.1355E-07" ixz="2.7299E-11" iyy="0.0002068" iyz="4.0363E-11" izz="0.00019603" />
     </inertial>
     <visual>
-      <origin
-        xyz="0 0 0"
-        rpy="0 0 0" />
+      <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh
-          filename="package://me557_pen_description/meshes/Link1.STL" />
+        <mesh filename="package://me557_pen_description/meshes/Link1.STL" />
       </geometry>
-      <material
-        name="">
-        <color
-          rgba="0.89412 0.89412 0.89412 1" />
+      <material name="">
+        <color rgba="0.50196 0.50196 1 1" />
       </material>
     </visual>
     <collision>
-      <origin
-        xyz="0 0 0"
-        rpy="0 0 0" />
+      <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh
-          filename="package://me557_pen_description/meshes/Link1.STL" />
+        <mesh filename="package://me557_pen_description/meshes/Link1.STL" />
       </geometry>
     </collision>
   </link>
-  <joint
-    name="Motor1_joint"
-    type="revolute">
-    <origin
-      xyz="0 0 0.0507"
-      rpy="0 0 0" />
-    <parent
-      link="base_link" />
-    <child
-      link="Link1" />
-    <axis
-      xyz="0 0 1" />
-    <limit
-      lower="-1.0472"
-      upper="0.6981"
-      effort="1.5"
-      velocity="6.18" />
+  <joint name="base_to_floor" type="fixed">
+    <origin xyz="0.91 0 -0.01" rpy="0 0 1.5708" />
+    <parent link="base_link" />
+    <child link="floor" />
   </joint>
-  <link
-    name="Link2_L">
+  <joint name="Motor1_joint" type="revolute">
+    <origin xyz="0 0 0.05" rpy="0 0 0" />
+    <parent link="base_link" />
+    <child link="Link1" />
+    <axis xyz="0 0 -1" />
+    <limit lower="-0.87265" upper="0.87265" effort="0" velocity="0" />
+  </joint>
+  <link name="Link2_L">
     <inertial>
-      <origin
-        xyz="-0.051943 -0.075549 0.087076"
-        rpy="0 0 0" />
-      <mass
-        value="0.11526" />
-      <inertia
-        ixx="7.5846E-05"
-        ixy="-5.683E-07"
-        ixz="-4.4672E-07"
-        iyy="0.00013596"
-        iyz="2.9075E-05"
-        izz="0.00012721" />
+      <origin xyz="1.5118E-06 0.13231 0.0003468" rpy="0 0 0" />
+      <mass value="0.12701" />
+      <inertia ixx="0.00076308" ixy="1.1682E-08" ixz="8.706E-09" iyy="0.00010667" iyz="-3.3149E-06" izz="0.00067538" />
     </inertial>
     <visual>
-      <origin
-        xyz="0 0 0"
-        rpy="0 0 0" />
+      <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh
-          filename="package://me557_pen_description/meshes/Link2_L.STL" />
+        <mesh filename="package://me557_pen_description/meshes/Link2_L.STL" />
       </geometry>
-      <material
-        name="">
-        <color
-          rgba="1 1 0.50196 1" />
+      <material name="">
+        <color rgba="0.79216 0.81961 0.93333 1" />
       </material>
     </visual>
     <collision>
-      <origin
-        xyz="0 0 0"
-        rpy="0 0 0" />
+      <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh
-          filename="package://me557_pen_description/meshes/Link2_L.STL" />
+        <mesh filename="package://me557_pen_description/meshes/Link2_L.STL" />
       </geometry>
     </collision>
   </link>
-  <joint
-    name="Motor2_L"
-    type="revolute">
-    <origin
-      xyz="0.052457 0.00059405 0.0483"
-      rpy="0 0 0" />
-    <parent
-      link="Link1" />
-    <child
-      link="Link2_L" />
-    <axis
-      xyz="0.99994 0.011324 0" />
-    <limit
-      lower="0"
-      upper="6.283"
-      effort="6"
-      velocity="6.6" />
+  <joint name="Motor2_L" type="revolute">
+    <origin xyz="0 0 0.049" rpy="1.5708 0 0.0064475" />
+    <parent link="Link1" />
+    <child link="Link2_L" />
+    <axis xyz="0 0 1" />
+    <limit lower="-1.047195" upper="1.047195" effort="0" velocity="0" />
   </joint>
-  <link
-    name="Link4">
+  <link name="Link4">
     <inertial>
-      <origin
-        xyz="0.021156 -6.0826E-05 0.10428"
-        rpy="0 0 0" />
-      <mass
-        value="0.10865" />
-      <inertia
-        ixx="6.7094E-05"
-        ixy="-4.18E-07"
-        ixz="-6.4328E-07"
-        iyy="7.5511E-05"
-        iyz="2.2666E-07"
-        izz="3.8222E-05" />
+      <origin xyz="0.00036697 0.055834 -0.0004101" rpy="0 0 0" />
+      <mass value="0.083206" />
+      <inertia ixx="9.1587E-05" ixy="-1.7788E-06" ixz="-2.7941E-07" iyy="2.5642E-05" iyz="2.0881E-06" izz="8.5875E-05" />
     </inertial>
     <visual>
-      <origin
-        xyz="0 0 0"
-        rpy="0 0 0" />
+      <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh
-          filename="package://me557_pen_description/meshes/Link4.STL" />
+        <mesh filename="package://me557_pen_description/meshes/Link4.STL" />
       </geometry>
-      <material
-        name="">
-        <color
-          rgba="1 1 1 1" />
+      <material name="">
+        <color rgba="0.79216 0.81961 0.93333 1" />
       </material>
     </visual>
     <collision>
-      <origin
-        xyz="0 0 0"
-        rpy="0 0 0" />
+      <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh
-          filename="package://me557_pen_description/meshes/Link4.STL" />
+        <mesh filename="package://me557_pen_description/meshes/Link4.STL" />
       </geometry>
     </collision>
   </link>
-  <joint
-    name="Motor4_elb"
-    type="revolute">
-    <origin
-      xyz="-0.072748 -0.12514 0.1444"
-      rpy="0 0 0" />
-    <parent
-      link="Link2_L" />
-    <child
-      link="Link4" />
-    <axis
-      xyz="-0.99994 -0.011324 0" />
-    <limit
-      lower="-2.4435"
-      upper="1.0472"
-      effort="1.5"
-      velocity="6.18" />
+  <joint name="Motor4_elb" type="revolute">
+    <origin xyz="0 0.2247 0.00104" rpy="0 0 0" />
+    <parent link="Link2_L" />
+    <child link="Link4" />
+    <axis xyz="0 0 1" />
+    <limit lower="-1.876225" upper="1.876225" effort="0" velocity="0" />
   </joint>
-  <link
-    name="Link5">
+  <link name="Link5">
     <inertial>
-      <origin
-        xyz="-0.0013002 -0.013978 -0.01034"
-        rpy="0 0 0" />
-      <mass
-        value="0.052656" />
-      <inertia
-        ixx="1.6759E-05"
-        ixy="-2.819E-07"
-        ixz="-7.7036E-07"
-        iyy="1.5947E-05"
-        iyz="-1.7053E-06"
-        izz="1.1111E-05" />
+      <origin xyz="-0.010184 -0.0007354 0.034941" rpy="0 0 0" />
+      <mass value="0.053757" />
+      <inertia ixx="1.8975E-05" ixy="3.4773E-08" ixz="4.7677E-06" iyy="2.5817E-05" iyz="2.3142E-07" izz="1.7812E-05" />
     </inertial>
     <visual>
-      <origin
-        xyz="0 0 0"
-        rpy="0 0 0" />
+      <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh
-          filename="package://me557_pen_description/meshes/Link5.STL" />
+        <mesh filename="package://me557_pen_description/meshes/Link5.STL" />
       </geometry>
-      <material
-        name="">
-        <color
-          rgba="1 1 1 1" />
+      <material name="">
+        <color rgba="0.9098 0.44314 0.031373 1" />
       </material>
     </visual>
     <collision>
-      <origin
-        xyz="0 0 0"
-        rpy="0 0 0" />
+      <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh
-          filename="package://me557_pen_description/meshes/Link5.STL" />
+        <mesh filename="package://me557_pen_description/meshes/Link5.STL" />
       </geometry>
     </collision>
   </link>
-  <joint
-    name="Motor5_wr"
-    type="revolute">
-    <origin
-      xyz="0.02195 -0.021925 0.17994"
-      rpy="0 0 0" />
-    <parent
-      link="Link4" />
-    <child
-      link="Link5" />
-    <axis
-      xyz="0.011324 -0.99993 -0.0028474" />
-    <limit
-      lower="-1.3963"
-      upper="1.3963"
-      effort="1.5"
-      velocity="6.18" />
+  <joint name="Motor5_wr" type="revolute">
+    <origin xyz="0.00108 0.0935 -0.001" rpy="1.5708 0 1.5708" />
+    <parent link="Link4" />
+    <child link="Link5" />
+    <axis xyz="0 0 -1" />
+    <limit lower="-0.95995" upper="0.95995" effort="0" velocity="0" />
   </joint>
-  <link
-    name="Link6">
+  <link name="Link6">
     <inertial>
-      <origin
-        xyz="-0.020588 -0.086108 -0.0028114"
-        rpy="0 0 0" />
-      <mass
-        value="0.05213" />
-      <inertia
-        ixx="3.8229E-05"
-        ixy="-7.0856E-07"
-        ixz="9.8884E-07"
-        iyy="8.518E-06"
-        iyz="-2.4648E-06"
-        izz="4.404E-05" />
+      <origin xyz="0.048807 0.037513 -0.0021456" rpy="0 0 0" />
+      <mass value="0.081357" />
+      <inertia ixx="2.8223E-05" ixy="-3.704E-06" ixz="-2.8914E-06" iyy="0.00024631" iyz="5.6477E-07" izz="0.00024327" />
     </inertial>
     <visual>
-      <origin
-        xyz="0 0 0"
-        rpy="0 0 0" />
+      <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh
-          filename="package://me557_pen_description/meshes/Link6.STL" />
+        <mesh filename="package://me557_pen_description/meshes/Link6.STL" />
       </geometry>
-      <material
-        name="">
-        <color
-          rgba="1 1 1 1" />
+      <material name="">
+        <color rgba="0.50196 1 0.50196 1" />
       </material>
     </visual>
     <collision>
-      <origin
-        xyz="0 0 0"
-        rpy="0 0 0" />
+      <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh
-          filename="package://me557_pen_description/meshes/Link6.STL" />
+        <mesh filename="package://me557_pen_description/meshes/Link6.STL" />
       </geometry>
     </collision>
   </link>
-  <joint
-    name="Joint_EE"
-    type="revolute">
-    <origin
-      xyz="0.021626 -0.020046 -0.00367"
-      rpy="0 0 0" />
-    <parent
-      link="Link5" />
-    <child
-      link="Link6" />
-    <axis
-      xyz="0.98598 0.01164 -0.16646" />
-    <limit
-      lower="-0.6981"
-      upper="2.0944"
-      effort="1.5"
-      velocity="6.18" />
+  <joint name="Joint_EE" type="revolute">
+    <origin xyz="0 -0.001 0.041" rpy="1.5708 0 0" />
+    <parent link="Link5" />
+    <child link="Link6" />
+    <axis xyz="0 0 1" />
+    <limit lower="-1.1781" upper="1.1781" effort="0" velocity="0" />
   </joint>
-  <link
-    name="Pen_tip">
+  <link name="Pen_tip">
     <inertial>
-      <origin
-        xyz="-0.0015437 0.24747 -0.28672"
-        rpy="0 0 0" />
-      <mass
-        value="5.5098" />
-      <inertia
-        ixx="0.21583"
-        ixy="0.00015166"
-        ixz="-0.00045441"
-        iyy="0.10918"
-        iyz="0.049251"
-        izz="0.15359" />
+      <origin xyz="1.2388E-08 -1.5096E-08 -0.0095156" rpy="0 0 0" />
+      <mass value="0.00038082" />
+      <inertia ixx="6.068E-09" ixy="2.1976E-14" ixz="1.8806E-14" iyy="6.0679E-09" iyz="-2.2912E-14" izz="1.8923E-09" />
     </inertial>
     <visual>
-      <origin
-        xyz="0 0 0"
-        rpy="0 0 0" />
+      <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <sphere radius="0.004" />
+        <mesh filename="package://me557_pen_description/meshes/Pen_tip.STL" />
       </geometry>
-      <material
-        name="">
-        <color
-          rgba="1 1 1 1" />
+      <material name="">
+        <color rgba="0.50196 1 0.50196 1" />
       </material>
     </visual>
     <collision>
-      <origin
-        xyz="0 0 0"
-        rpy="0 0 0" />
+      <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <sphere radius="0.004" />
+        <mesh filename="package://me557_pen_description/meshes/Pen_tip.STL" />
       </geometry>
     </collision>
   </link>
-  <joint
-    name="pen_tip_fixed"
-    type="fixed">
-    <origin
-      xyz="-0.021396 -0.18979 -0.0096416"
-      rpy="0 0 0" />
-    <parent
-      link="Link6" />
-    <child
-      link="Pen_tip" />
-    <axis
-      xyz="0 0 0" />
+  <joint name="pen_tip_fixed" type="fixed">
+    <origin xyz="0.17403 0.0375 -0.00098" rpy="1.5708 -1.5643 1.5708" />
+    <parent link="Link6" />
+    <child link="Pen_tip" />
   </joint>
-  <link
-    name="Link3_R">
+  <link name="Link3_R">
     <inertial>
-      <origin
-        xyz="0.052802 -0.10824 0.024307"
-        rpy="0 0 0" />
-      <mass
-        value="5.5098" />
-      <inertia
-        ixx="0.21583"
-        ixy="0.00015166"
-        ixz="-0.00045441"
-        iyy="0.10918"
-        iyz="0.049251"
-        izz="0.15359" />
+      <origin xyz="0.052802 -0.10824 0.024307" rpy="0 0 0" />
+      <mass value="5.5098" />
+      <inertia ixx="0.21583" ixy="0.00015166" ixz="-0.00045441" iyy="0.10918" iyz="0.049251" izz="0.15359" />
     </inertial>
   </link>
-  <joint
-    name="Motor3_R"
-    type="revolute">
-    <origin
-      xyz="-0.052457 -0.00059406 0.0483"
-      rpy="0 0 0" />
-    <parent
-      link="Link1" />
-    <child
-      link="Link3_R" />
-    <axis
-      xyz="-0.99994 -0.011324 0" />
-    <limit
-      lower="-1.0472"
-      upper="1.0472"
-      effort="6"
-      velocity="6.6" />
-    <mimic
-      joint="Motor2_L"
-      multiplier="-1"
-      offset="0" />
+  <joint name="Motor3_R" type="revolute">
+    <origin xyz="-0.052457 -0.00059406 0.0483" rpy="0 0 0" />
+    <parent link="Link1" />
+    <child link="Link3_R" />
+    <axis xyz="-0.99994 -0.011324 0" />
+    <limit lower="-1.0472" upper="1.0472" effort="6" velocity="6.6" />
+    <mimic joint="Motor2_L" multiplier="-1" offset="0" />
   </joint>
   <ros2_control name="FakeSystem" type="system">
     <hardware>
@@ -466,35 +238,35 @@
     <joint name="Motor1_joint">
       <command_interface name="position" />
       <state_interface name="position">
-        <param name="initial_value">-2.0000000000131024e-05</param>
+        <param name="initial_value">0.0</param>
       </state_interface>
       <state_interface name="velocity" />
     </joint>
     <joint name="Motor2_L">
       <command_interface name="position" />
       <state_interface name="position">
-        <param name="initial_value">5.5698795</param>
+        <param name="initial_value">0.0</param>
       </state_interface>
       <state_interface name="velocity" />
     </joint>
     <joint name="Motor4_elb">
       <command_interface name="position" />
       <state_interface name="position">
-        <param name="initial_value">-0.68872511</param>
+        <param name="initial_value">0.0</param>
       </state_interface>
       <state_interface name="velocity" />
     </joint>
     <joint name="Motor5_wr">
       <command_interface name="position" />
       <state_interface name="position">
-        <param name="initial_value">0.189</param>
+        <param name="initial_value">0.0</param>
       </state_interface>
       <state_interface name="velocity" />
     </joint>
     <joint name="Joint_EE">
       <command_interface name="position" />
       <state_interface name="position">
-        <param name="initial_value">-0.0002542500000000114</param>
+        <param name="initial_value">0.0</param>
       </state_interface>
       <state_interface name="velocity" />
     </joint>

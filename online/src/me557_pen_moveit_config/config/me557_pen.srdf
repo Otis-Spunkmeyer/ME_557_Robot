@@ -7,11 +7,11 @@
   </group>
 
   <group_state name="home" group="Write">
-    <joint name="Motor1_joint" value="-2.0000000000131024e-05" />
-    <joint name="Motor2_L" value="5.5698795" />
-    <joint name="Motor4_elb" value="-0.68872511" />
-    <joint name="Motor5_wr" value="0.189" />
-    <joint name="Joint_EE" value="-0.0002542500000000114" />
+    <joint name="Motor1_joint" value="0.0" />
+    <joint name="Motor2_L" value="0.0" />
+    <joint name="Motor4_elb" value="0.0" />
+    <joint name="Motor5_wr" value="0.0" />
+    <joint name="Joint_EE" value="0.0" />
   </group_state>
 
   <disable_collisions link1="base_link" link2="Link1" reason="Adjacent" />

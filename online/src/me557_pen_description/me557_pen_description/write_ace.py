@@ -61,6 +61,7 @@ class AceWriter(Node):
         self.declare_parameter("offset_x", 0.0)
         self.declare_parameter("offset_y", 0.0)
         self.declare_parameter("offset_z", 0.0)
+        self.declare_parameter("semantic_yaw_deg", 0.0)
         self.declare_parameter("workspace_x_min", -inch(7.0))
         self.declare_parameter("workspace_x_max", inch(7.0))
         self.declare_parameter("workspace_enforce_x_bounds", False)
@@ -72,6 +73,7 @@ class AceWriter(Node):
         self.declare_parameter("fallback_to_noncartesian", True)
         self.declare_parameter("align_orientation_to_current_pose", True)
         self.declare_parameter("min_joint_span_rad", 1e-4)
+        self.declare_parameter("max_joint_span_rad", 1.2)
         self.declare_parameter("plan_only_capture", False)
         self.declare_parameter(
             "trajectory_header_output",
@@ -121,6 +123,10 @@ class AceWriter(Node):
         self.offset_x = float(self.get_parameter("offset_x").value)
         self.offset_y = float(self.get_parameter("offset_y").value)
         self.offset_z = float(self.get_parameter("offset_z").value)
+        self.semantic_yaw_deg = float(self.get_parameter("semantic_yaw_deg").value)
+        self.semantic_yaw_rad = math.radians(self.semantic_yaw_deg)
+        self._semantic_yaw_c = math.cos(self.semantic_yaw_rad)
+        self._semantic_yaw_s = math.sin(self.semantic_yaw_rad)
         self.workspace_x_min = float(self.get_parameter("workspace_x_min").value)
         self.workspace_x_max = float(self.get_parameter("workspace_x_max").value)
         self.workspace_enforce_x_bounds = bool(
@@ -142,6 +148,7 @@ class AceWriter(Node):
             self.get_parameter("align_orientation_to_current_pose").value
         )
         self.min_joint_span_rad = float(self.get_parameter("min_joint_span_rad").value)
+        self.max_joint_span_rad = float(self.get_parameter("max_joint_span_rad").value)
         self.plan_only_capture = bool(self.get_parameter("plan_only_capture").value)
         self.trajectory_header_output = str(
             self.get_parameter("trajectory_header_output").value
@@ -209,6 +216,7 @@ class AceWriter(Node):
             f"tol_ori={self.tolerance_orientation:.3f} "
             f"w_pos={self.weight_position:.2f} "
             f"w_ori={self.weight_orientation:.2f} "
+            f"semantic_yaw_deg={self.semantic_yaw_deg:.1f} "
             f"offset=({self.offset_x:.4f},{self.offset_y:.4f},{self.offset_z:.4f}) "
             f"x_bounds_enforced={self.workspace_enforce_x_bounds} "
             f"x_bounds=[{self.workspace_x_min:.4f},{self.workspace_x_max:.4f}] "
@@ -219,6 +227,7 @@ class AceWriter(Node):
             f"fallback_noncart={self.fallback_to_noncartesian} "
             f"align_ori={self.align_orientation_to_current_pose} "
             f"min_joint_span={self.min_joint_span_rad:g} "
+            f"max_joint_span={self.max_joint_span_rad:g} "
             f"plan_only={self.plan_only_capture} "
             f"scene_setup={self.scene_setup_enabled}"
         )
@@ -323,6 +332,12 @@ class AceWriter(Node):
             f"'{action_name}' within {timeout_sec:.1f}s. Is MoveIt demo.launch.py running?"
         )
 
+    def _rotate_semantic_xy(self, x: float, y: float):
+        return (
+            self._semantic_yaw_c * x - self._semantic_yaw_s * y,
+            self._semantic_yaw_s * x + self._semantic_yaw_c * y,
+        )
+
     def _world_from_semantic(
         self,
         forward: float,
@@ -335,13 +350,19 @@ class AceWriter(Node):
             anchor_f, anchor_l, anchor_z = anchor_semantic
             ax, ay, az = anchor_world
             s = self.relative_scale
-            x = ax + s * (-(lateral - anchor_l)) + self.offset_x
-            y = ay + s * (-(forward - anchor_f)) + self.offset_y
+            dx_sem = -(lateral - anchor_l)
+            dy_sem = -(forward - anchor_f)
+            dx_rot, dy_rot = self._rotate_semantic_xy(dx_sem, dy_sem)
+            x = ax + s * dx_rot + self.offset_x
+            y = ay + s * dy_rot + self.offset_y
             return x, y, az + s * (z - anchor_z) + self.offset_z
 
         # Flip lateral so text is readable from the front.
-        x = -lateral + self.offset_x
-        y = -forward + self.offset_y
+        x_sem = -lateral
+        y_sem = -forward
+        x_rot, y_rot = self._rotate_semantic_xy(x_sem, y_sem)
+        x = x_rot + self.offset_x
+        y = y_rot + self.offset_y
         return x, y, z + self.offset_z
 
     def _apply_workspace_bounds(self, x: float, y: float, z: float):
@@ -556,6 +577,12 @@ class AceWriter(Node):
                     raise RuntimeError(
                         "Planning returned near-zero joint motion "
                         f"(max_span={max_span:.3e} rad < {self.min_joint_span_rad:.3e})."
+                    )
+                if self.max_joint_span_rad > 0.0 and max_span > self.max_joint_span_rad:
+                    raise RuntimeError(
+                        "Planning returned excessive joint motion "
+                        f"(max_span={max_span:.3f} rad > {self.max_joint_span_rad:.3f}); "
+                        "rejecting to avoid branch-flip style detours."
                     )
         if planned_cartesian != self.use_cartesian:
             self.get_logger().info(
