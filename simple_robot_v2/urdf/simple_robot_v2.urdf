@@ -1,0 +1,390 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This URDF was automatically created by SolidWorks to URDF Exporter! Originally created by Stephen Brawner (brawner@gmail.com) 
+     Commit Version: 1.6.0-4-g7f85cfe  Build Version: 1.6.7995.38578
+     For more information, please see http://wiki.ros.org/sw_urdf_exporter -->
+<robot
+  name="simple_robot_v2">
+  <link
+    name="FixedBase">
+    <inertial>
+      <origin
+        xyz="-0.008662 6.915E-09 0.034203"
+        rpy="0 0 0" />
+      <mass
+        value="0.49574" />
+      <inertia
+        ixx="0.0011079"
+        ixy="1.4362E-10"
+        ixz="-3.7324E-05"
+        iyy="0.0011344"
+        iyz="-8.7399E-11"
+        izz="0.0016547" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://simple_robot_v2/meshes/FixedBase.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.79216 0.81961 0.93333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://simple_robot_v2/meshes/FixedBase.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <link
+    name="RotatingBaseLink">
+    <inertial>
+      <origin
+        xyz="-1.0615E-08 1.3952E-09 0.05044"
+        rpy="0 0 0" />
+      <mass
+        value="0.24905" />
+      <inertia
+        ixx="0.00030195"
+        ixy="6.1355E-07"
+        ixz="2.7299E-11"
+        iyy="0.0002068"
+        iyz="4.0363E-11"
+        izz="0.00019603" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://simple_robot_v2/meshes/RotatingBaseLink.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.50196 0.50196 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://simple_robot_v2/meshes/RotatingBaseLink.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="RotatingBaseJoint"
+    type="revolute">
+    <origin
+      xyz="0 0 0.05"
+      rpy="0 0 0" />
+    <parent
+      link="FixedBase" />
+    <child
+      link="RotatingBaseLink" />
+    <axis
+      xyz="0 0 -1" />
+    <limit
+      lower="2.0944"
+      upper="3.8397"
+      effort="0"
+      velocity="0" />
+  </joint>
+  <link
+    name="ShoulderLink">
+    <inertial>
+      <origin
+        xyz="1.5118E-06 0.13231 0.0003468"
+        rpy="0 0 0" />
+      <mass
+        value="0.12701" />
+      <inertia
+        ixx="0.00076308"
+        ixy="1.1682E-08"
+        ixz="8.706E-09"
+        iyy="0.00010667"
+        iyz="-3.3149E-06"
+        izz="0.00067538" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://simple_robot_v2/meshes/ShoulderLink.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.79216 0.81961 0.93333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://simple_robot_v2/meshes/ShoulderLink.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="ShoulderJoint"
+    type="revolute">
+    <origin
+      xyz="0 0 0.049"
+      rpy="1.5708 0 0.0064475" />
+    <parent
+      link="RotatingBaseLink" />
+    <child
+      link="ShoulderLink" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="2.0944"
+      upper="4.18879"
+      effort="0"
+      velocity="0" />
+  </joint>
+  <link
+    name="ElbowLink">
+    <inertial>
+      <origin
+        xyz="0.00036697 0.055834 -0.0004101"
+        rpy="0 0 0" />
+      <mass
+        value="0.083206" />
+      <inertia
+        ixx="9.1587E-05"
+        ixy="-1.7788E-06"
+        ixz="-2.7941E-07"
+        iyy="2.5642E-05"
+        iyz="2.0881E-06"
+        izz="8.5875E-05" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://simple_robot_v2/meshes/ElbowLink.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.79216 0.81961 0.93333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://simple_robot_v2/meshes/ElbowLink.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="ElbowJoint"
+    type="revolute">
+    <origin
+      xyz="0 0.2247 0.00104"
+      rpy="0 0 0" />
+    <parent
+      link="ShoulderLink" />
+    <child
+      link="ElbowLink" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="1.309"
+      upper="5.06145"
+      effort="0"
+      velocity="0" />
+  </joint>
+  <link
+    name="WristLink">
+    <inertial>
+      <origin
+        xyz="-0.010184 -0.0007354 0.034941"
+        rpy="0 0 0" />
+      <mass
+        value="0.053757" />
+      <inertia
+        ixx="1.8975E-05"
+        ixy="3.4773E-08"
+        ixz="4.7677E-06"
+        iyy="2.5817E-05"
+        iyz="2.3142E-07"
+        izz="1.7812E-05" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://simple_robot_v2/meshes/WristLink.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.9098 0.44314 0.031373 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://simple_robot_v2/meshes/WristLink.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="WristJoint"
+    type="revolute">
+    <origin
+      xyz="0.00108 0.0935 -0.001"
+      rpy="1.5708 0 1.5708" />
+    <parent
+      link="ElbowLink" />
+    <child
+      link="WristLink" />
+    <axis
+      xyz="0 0 -1" />
+    <limit
+      lower="2.618"
+      upper="4.5379"
+      effort="0"
+      velocity="0" />
+  </joint>
+  <link
+    name="PenLink">
+    <inertial>
+      <origin
+        xyz="0.048807 0.037513 -0.0021456"
+        rpy="0 0 0" />
+      <mass
+        value="0.081357" />
+      <inertia
+        ixx="2.8223E-05"
+        ixy="-3.704E-06"
+        ixz="-2.8914E-06"
+        iyy="0.00024631"
+        iyz="5.6477E-07"
+        izz="0.00024327" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://simple_robot_v2/meshes/PenLink.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.50196 1 0.50196 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://simple_robot_v2/meshes/PenLink.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="PenJoint"
+    type="revolute">
+    <origin
+      xyz="0 -0.001 0.041"
+      rpy="1.5708 0 0" />
+    <parent
+      link="WristLink" />
+    <child
+      link="PenLink" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="1.4835"
+      upper="3.8397"
+      effort="0"
+      velocity="0" />
+  </joint>
+  <link
+    name="PenTipLink">
+    <inertial>
+      <origin
+        xyz="1.2388E-08 -1.5096E-08 -0.0095156"
+        rpy="0 0 0" />
+      <mass
+        value="0.00038082" />
+      <inertia
+        ixx="6.068E-09"
+        ixy="2.1976E-14"
+        ixz="1.8806E-14"
+        iyy="6.0679E-09"
+        iyz="-2.2912E-14"
+        izz="1.8923E-09" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://simple_robot_v2/meshes/PenTipLink.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.50196 1 0.50196 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://simple_robot_v2/meshes/PenTipLink.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="PenTipJoint"
+    type="continuous">
+    <origin
+      xyz="0.17403 0.0375 -0.00098"
+      rpy="1.5708 -1.5643 1.5708" />
+    <parent
+      link="PenLink" />
+    <child
+      link="PenTipLink" />
+    <axis
+      xyz="-0.45244 0.63071 -0.63047" />
+  </joint>
+</robot>
