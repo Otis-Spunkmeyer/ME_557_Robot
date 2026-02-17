@@ -193,13 +193,9 @@ class AceWriter(Node):
         if len(quat_xyzw) != 4:
             raise ValueError("quat_xyzw must contain exactly 4 values [x, y, z, w]")
         self.quat_xyzw = [float(v) for v in quat_xyzw]
-        if (
-            self.plan_only_capture
-            and self.use_cartesian
-            and self.weight_orientation <= 0.0
-        ):
+        if self.use_cartesian and self.weight_orientation <= 0.0:
             self.get_logger().warn(
-                "plan_only_capture + cartesian + weight_orientation<=0 is unstable; "
+                "cartesian + weight_orientation<=0 is unstable with current pymoveit2; "
                 "using cartesian=False."
             )
             self.use_cartesian = False
@@ -483,11 +479,13 @@ class AceWriter(Node):
         # With orientation disabled, use a position-only request.
         # Some cartesian plan calls raise instead of returning None.
         try:
+            start_state = self.moveit2.joint_state
             if self.weight_orientation <= 0.0:
                 traj = self.moveit2.plan(
                     position=[x, y, z],
                     tolerance_position=self.tolerance_position,
                     weight_position=self.weight_position,
+                    start_joint_state=start_state,
                     cartesian=cartesian,
                     max_step=self.cartesian_max_step,
                     cartesian_fraction_threshold=self.cartesian_fraction_threshold,
@@ -500,6 +498,7 @@ class AceWriter(Node):
                     tolerance_orientation=self.tolerance_orientation,
                     weight_position=self.weight_position,
                     weight_orientation=self.weight_orientation,
+                    start_joint_state=start_state,
                     cartesian=cartesian,
                     max_step=self.cartesian_max_step,
                     cartesian_fraction_threshold=self.cartesian_fraction_threshold,
@@ -566,7 +565,15 @@ class AceWriter(Node):
         if self.plan_only_capture:
             return
         self.moveit2.execute(traj)
-        self.moveit2.wait_until_executed()
+        if not self.moveit2.wait_until_executed():
+            exec_err = self.moveit2.get_last_execution_error_code()
+            err_suffix = ""
+            if exec_err is not None and hasattr(exec_err, "val"):
+                err_suffix = f" (moveit_error_code={exec_err.val})"
+            raise RuntimeError(
+                "Trajectory execution failed: execute_trajectory returned non-success"
+                f"{err_suffix}."
+            )
 
     def _append_planned_samples(self, traj) -> None:
         names = list(traj.joint_names)
