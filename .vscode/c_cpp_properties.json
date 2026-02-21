@@ -1,0 +1,22 @@
+{
+  "configurations": [
+    {
+      "name": "Linux",
+      "includePath": [
+        "${workspaceFolder}/**",
+        "${env:HOME}/Arduino/libraries/**",
+        "${env:HOME}/.arduino15/packages/**/libraries/**/src/**",
+        "${env:HOME}/.arduino15/packages/**/hardware/**/**/cores/**",
+        "${env:HOME}/.arduino15/packages/**/hardware/**/**/variants/**",
+        "${env:HOME}/Arduino/libraries/**",
+        "${env:HOME}/.platformio/packages/**/framework-arduino*/cores/**"
+      ],
+      "defines": [],
+      "compilerPath": "/usr/bin/gcc",
+      "cStandard": "c11",
+      "cppStandard": "c++17",
+      "intelliSenseMode": "linux-gcc-x64"
+    }
+  ],
+  "version": 4
+}

@@ -1,0 +1,71 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="me557_pen">
+
+  <!--
+    Basic placeholder model for ME557 pen.
+    Replace or extend this with SolidWorks-exported meshes in the future.
+    For mesh-based visuals, use:
+      <mesh filename="package://me557_pen_description/meshes/your_mesh.stl"/>
+  -->
+
+  <xacro:macro name="me557_pen_macro" params="prefix:='me557_'">
+
+    <!-- Inertial constants kept simple for now -->
+    <link name="${prefix}base_link">
+      <inertial>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <mass value="0.1"/>
+        <inertia ixx="1e-3" ixy="0.0" ixz="0.0"
+                 iyy="1e-3" iyz="0.0"
+                 izz="1e-3"/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0.05" rpy="0 0 0"/>
+        <geometry>
+          <!-- Simple cylinder as a stand-in for the pen body -->
+          <cylinder radius="0.008" length="0.18"/>
+        </geometry>
+        <material name="pen_body_color">
+          <color rgba="0.1 0.1 0.8 1.0"/>
+        </material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0.05" rpy="0 0 0"/>
+        <geometry>
+          <cylinder radius="0.008" length="0.18"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <!-- Optional tip link to illustrate multi-link structure -->
+    <joint name="${prefix}base_to_tip" type="fixed">
+      <origin xyz="0 0 0.18" rpy="0 0 0"/>
+      <parent link="${prefix}base_link"/>
+      <child link="${prefix}tip_link"/>
+    </joint>
+
+    <link name="${prefix}tip_link">
+      <visual>
+        <origin xyz="0 0 0.01" rpy="0 0 0"/>
+        <geometry>
+          <sphere radius="0.005"/>
+        </geometry>
+        <material name="pen_tip_color">
+          <color rgba="0.8 0.1 0.1 1.0"/>
+        </material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0.01" rpy="0 0 0"/>
+        <geometry>
+          <sphere radius="0.005"/>
+        </geometry>
+      </collision>
+    </link>
+
+  </xacro:macro>
+
+  <!-- Instantiate the macro -->
+  <xacro:me557_pen_macro/>
+
+</robot>
+

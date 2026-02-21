@@ -58,7 +58,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'write_ace = me557_pen_description.write_ace:main',
+            'write_on_board = me557_pen_description.write_on_board:main',
         ],
     },
 )

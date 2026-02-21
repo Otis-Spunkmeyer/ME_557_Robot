@@ -1,0 +1,9 @@
+moveit_setup_assistant_config:
+  URDF:
+    package: me557_pen_description
+    relative_path: urdf/me557_pen.urdf
+  SRDF:
+    relative_path: config/me557_pen.srdf
+  CONFIG:
+    package: me557_pen_moveit_config
+    relative_path: .

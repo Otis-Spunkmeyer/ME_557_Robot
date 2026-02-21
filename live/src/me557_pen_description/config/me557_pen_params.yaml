@@ -1,0 +1,15 @@
+robot_state_publisher:
+  ros__parameters:
+    use_sim_time: false
+
+    # Placeholder for future configuration parameters.
+    # Example: frame remapping, visualization flags, etc.
+    base_frame: "me557_base_link"
+joint_state_publisher_gui:
+  ros__parameters:
+    zeros.Motor1_joint: -2.0000000000131024e-05
+    zeros.Motor2_L: 5.5698795
+    zeros.Motor4_elb: -0.68872511
+    zeros.Motor5_wr: 0.189
+    zeros.Joint_EE: -0.0002542500000000114
+
