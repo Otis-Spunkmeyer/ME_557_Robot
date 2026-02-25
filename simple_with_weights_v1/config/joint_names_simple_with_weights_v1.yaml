@@ -1,1 +1,0 @@
-controller_joint_names: ['', 'RotatingBaseJoint', 'ShoulderJoint', 'ElbowJoint', 'WristJoint', 'PenJoint', 'PenTipJoint', ]
