@@ -1,0 +1,390 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This URDF was automatically created by SolidWorks to URDF Exporter! Originally created by Stephen Brawner (brawner@gmail.com) 
+     Commit Version: 1.6.0-4-g7f85cfe  Build Version: 1.6.7995.38578
+     For more information, please see http://wiki.ros.org/sw_urdf_exporter -->
+<robot
+  name="simple_with_weights_v1">
+  <link
+    name="FixedBase">
+    <inertial>
+      <origin
+        xyz="6.915E-09 0.008662 0.034203"
+        rpy="0 0 0" />
+      <mass
+        value="0.49574" />
+      <inertia
+        ixx="0.0011344"
+        ixy="-1.4362E-10"
+        ixz="-8.7399E-11"
+        iyy="0.0011079"
+        iyz="3.7324E-05"
+        izz="0.0016547" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://simple_with_weights_v1/meshes/FixedBase.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.79216 0.81961 0.93333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://simple_with_weights_v1/meshes/FixedBase.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <link
+    name="RotatingBaseLink">
+    <inertial>
+      <origin
+        xyz="1.7639E-09 1.0285E-08 0.05044"
+        rpy="0 0 0" />
+      <mass
+        value="0.36361" />
+      <inertia
+        ixx="0.00030192"
+        ixy="1.5751E-11"
+        ixz="6.1341E-11"
+        iyy="0.00044085"
+        iyz="-4.25E-11"
+        izz="0.00028621" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://simple_with_weights_v1/meshes/RotatingBaseLink.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.50196 0.50196 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://simple_with_weights_v1/meshes/RotatingBaseLink.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="RotatingBaseJoint"
+    type="revolute">
+    <origin
+      xyz="0 0 0.05"
+      rpy="0 0 0" />
+    <parent
+      link="FixedBase" />
+    <child
+      link="RotatingBaseLink" />
+    <axis
+      xyz="0 0 -1" />
+    <limit
+      lower="0"
+      upper="0"
+      effort="0.15"
+      velocity="0" />
+  </joint>
+  <link
+    name="ShoulderLink">
+    <inertial>
+      <origin
+        xyz="-0.000346804399082955 -1.51178301074372E-06 0.132307785392207"
+        rpy="0 0 0" />
+      <mass
+        value="0.138435482736122" />
+      <inertia
+        ixx="0.000736162445902838"
+        ixy="9.48957047689653E-09"
+        ixz="3.61321256897159E-06"
+        iyy="0.000831759871530799"
+        iyz="-1.27335642978093E-08"
+        izz="0.000116269160165353" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://simple_with_weights_v1/meshes/ShoulderLink.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://simple_with_weights_v1/meshes/ShoulderLink.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="ShoulderJoint"
+    type="revolute">
+    <origin
+      xyz="0 0 0.049"
+      rpy="0 0 0" />
+    <parent
+      link="RotatingBaseLink" />
+    <child
+      link="ShoulderLink" />
+    <axis
+      xyz="-1 0 0" />
+    <limit
+      lower="0"
+      upper="0"
+      effort="8"
+      velocity="0" />
+  </joint>
+  <link
+    name="ElbowLink">
+    <inertial>
+      <origin
+        xyz="0.000410096249429826 -0.000366974946254552 0.0558340165515793"
+        rpy="0 0 0" />
+      <mass
+        value="0.0915265999893292" />
+      <inertia
+        ixx="9.44622132534114E-05"
+        ixy="-3.07347622175509E-07"
+        ixz="-2.29694945208365E-06"
+        iyy="0.000100745714566865"
+        iyz="1.95671551577555E-06"
+        izz="2.82058356221637E-05" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://simple_with_weights_v1/meshes/ElbowLink.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://simple_with_weights_v1/meshes/ElbowLink.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="ElbowJoint"
+    type="revolute">
+    <origin
+      xyz="-0.00104 0 0.2247"
+      rpy="0 0 0" />
+    <parent
+      link="ShoulderLink" />
+    <child
+      link="ElbowLink" />
+    <axis
+      xyz="-1 0 0" />
+    <limit
+      lower="0"
+      upper="0"
+      effort="0.15"
+      velocity="0" />
+  </joint>
+  <link
+    name="WristLink">
+    <inertial>
+      <origin
+        xyz="0.00073541 -0.034941 -0.010184"
+        rpy="0 0 0" />
+      <mass
+        value="0.069884" />
+      <inertia
+        ixx="3.3562E-05"
+        ixy="3.0085E-07"
+        ixz="-4.5205E-08"
+        iyy="2.3156E-05"
+        iyz="-6.198E-06"
+        izz="2.4667E-05" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://simple_with_weights_v1/meshes/WristLink.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.9098 0.44314 0.031373 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://simple_with_weights_v1/meshes/WristLink.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="WristJoint"
+    type="revolute">
+    <origin
+      xyz="0.001 -0.00108 0.0935"
+      rpy="0 0 0" />
+    <parent
+      link="ElbowLink" />
+    <child
+      link="WristLink" />
+    <axis
+      xyz="0 1 0" />
+    <limit
+      lower="0"
+      upper="0"
+      effort="0.15"
+      velocity="0" />
+  </joint>
+  <link
+    name="PenLink">
+    <inertial>
+      <origin
+        xyz="-0.0021456 -0.037513 0.048807"
+        rpy="0 0 0" />
+      <mass
+        value="0.071594" />
+      <inertia
+        ixx="0.00021408"
+        ixy="-4.97E-07"
+        ixz="-2.5445E-06"
+        iyy="0.00021675"
+        iyz="3.2596E-06"
+        izz="2.4836E-05" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://simple_with_weights_v1/meshes/PenLink.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.50196 1 0.50196 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://simple_with_weights_v1/meshes/PenLink.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="PenJoint"
+    type="revolute">
+    <origin
+      xyz="0.001 -0.041 0"
+      rpy="0 0 0" />
+    <parent
+      link="WristLink" />
+    <child
+      link="PenLink" />
+    <axis
+      xyz="1 0 0" />
+    <limit
+      lower="0"
+      upper="0"
+      effort="0.15"
+      velocity="0" />
+  </joint>
+  <link
+    name="PenTipLink">
+    <inertial>
+      <origin
+        xyz="-1.2671E-08 0.0095156 1.4864E-08"
+        rpy="0 0 0" />
+      <mass
+        value="0.00049506" />
+      <inertia
+        ixx="7.8884E-09"
+        ixy="2.5005E-14"
+        ixz="2.9853E-14"
+        iyy="2.46E-09"
+        iyz="-2.9322E-14"
+        izz="7.8883E-09" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://simple_with_weights_v1/meshes/PenTipLink.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.50196 1 0.50196 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://simple_with_weights_v1/meshes/PenTipLink.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="PenTipJoint"
+    type="continuous">
+    <origin
+      xyz="-0.00098 -0.0375 0.17403"
+      rpy="-1.5708 0 -0.5042" />
+    <parent
+      link="PenLink" />
+    <child
+      link="PenTipLink" />
+    <axis
+      xyz="-0.70084 0.63047 0.33365" />
+  </joint>
+</robot>
