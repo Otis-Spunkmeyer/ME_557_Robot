@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<robot name="me557_pen">
+  <virtual_joint name="world_joint" type="fixed" parent_frame="world" child_link="base_link" />
+  <group name="Write">
+    <chain base_link="base_link" tip_link="Pen_tip" />
+  </group>
+
+  <group_state name="home" group="Write">
+    <joint name="Motor1_joint" value="0.0" />
+    <joint name="Motor2_L" value="0.0" />
+    <joint name="Motor4_elb" value="0.0" />
+    <joint name="Motor5_wr" value="0.0" />
+    <joint name="Joint_EE" value="0.0" />
+  </group_state>
+
+  <disable_collisions link1="base_link" link2="Link1" reason="Adjacent" />
+  <disable_collisions link1="Link1" link2="Link2_L" reason="Adjacent" />
+  <disable_collisions link1="Link2_L" link2="Link4" reason="Adjacent" />
+  <disable_collisions link1="Link4" link2="Link5" reason="Adjacent" />
+  <disable_collisions link1="Link5" link2="Link6" reason="Adjacent" />
+  <disable_collisions link1="Link6" link2="Pen_tip" reason="Adjacent" />
+  <disable_collisions link1="base_link" link2="floor" reason="Adjacent" />
+</robot>

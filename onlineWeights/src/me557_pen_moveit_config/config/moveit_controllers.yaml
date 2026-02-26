@@ -1,0 +1,23 @@
+moveit_controller_manager: moveit_simple_controller_manager/MoveItSimpleControllerManager
+
+moveit_simple_controller_manager:
+  controller_names:
+    - write_arm_controller
+
+  write_arm_controller:
+    type: FollowJointTrajectory
+    action_ns: follow_joint_trajectory
+    default: true
+    joints:
+      - Motor1_joint
+      - Motor2_L
+      - Motor4_elb
+      - Motor5_wr
+      - Joint_EE
+
+# Reduce false execution aborts when controller motion takes longer than
+# nominal planned duration on short, dense segment sequences.
+trajectory_execution:
+  allowed_execution_duration_scaling: 4.0
+  allowed_goal_duration_margin: 2.0
+  allowed_start_tolerance: 0.12

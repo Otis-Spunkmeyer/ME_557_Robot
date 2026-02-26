@@ -1,0 +1,40 @@
+joint_limits:
+  # Velocities set to realistic pen-writing speeds for AX-12A / MX-64 servos
+  # under load.  Hardware maxima (6-8 rad/s) are no-load figures — actual
+  # tracking speed during writing is far lower.  Tune these up if simulation
+  # still looks slower than the real robot, down if real robot can't keep up.
+  Motor1_joint:
+    has_velocity_limits: true
+    max_velocity: 0.7           # rad/s — AX-12A under bearing + inertial load
+    has_acceleration_limits: true
+    max_acceleration: 2.0
+    has_effort_limits: true
+    max_effort: 0.15
+  Motor2_L:
+    has_velocity_limits: true
+    max_velocity: 1.0           # rad/s — MX-64, high torque, can move faster
+    has_acceleration_limits: true
+    max_acceleration: 4.0
+    has_effort_limits: true
+    max_effort: 8.0
+  Motor4_elb:
+    has_velocity_limits: true
+    max_velocity: 0.5           # rad/s — worst gravity load, needs most headroom
+    has_acceleration_limits: true
+    max_acceleration: 1.5
+    has_effort_limits: true
+    max_effort: 0.15
+  Motor5_wr:
+    has_velocity_limits: true
+    max_velocity: 0.7
+    has_acceleration_limits: true
+    max_acceleration: 2.5
+    has_effort_limits: true
+    max_effort: 0.15
+  Joint_EE:
+    has_velocity_limits: true
+    max_velocity: 0.7
+    has_acceleration_limits: true
+    max_acceleration: 2.5
+    has_effort_limits: true
+    max_effort: 0.15

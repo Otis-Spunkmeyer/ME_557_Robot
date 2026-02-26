@@ -83,9 +83,13 @@ class AceWriter(Node):
         )
         self.declare_parameter("pen_lift_pause_sec", 0.2)
         self.declare_parameter("pen_lift_speed_scale", 0.3)
+        # Fraction of joint velocity/acceleration limits for planning.
+        # Values < 1.0 leave headroom so the real servo can track the profile.
+        self.declare_parameter("velocity_scaling", 1.0)
+        self.declare_parameter("acceleration_scaling", 1.0)
         self.declare_parameter(
             "letter_coordinates_file",
-            "/home/rosubu/ME_557_Robot/online/letterCoordinates.json",
+            "/home/rosubu/ME_557_Robot/onlineWeights/letterCoordinates.json",
         )
         self.declare_parameter("scene_setup_enabled", False)
         self.declare_parameter("scene_setup_timeout_sec", 5.0)
@@ -166,6 +170,8 @@ class AceWriter(Node):
         )
         self.pen_lift_pause_sec = float(self.get_parameter("pen_lift_pause_sec").value)
         self.pen_lift_speed_scale = float(self.get_parameter("pen_lift_speed_scale").value)
+        self.velocity_scaling = float(self.get_parameter("velocity_scaling").value)
+        self.acceleration_scaling = float(self.get_parameter("acceleration_scaling").value)
         self.letter_coordinates_file = str(
             self.get_parameter("letter_coordinates_file").value
         )
@@ -256,6 +262,12 @@ class AceWriter(Node):
             end_effector_name=end_effector_name,
             group_name=group_name,
             callback_group=self.callback_group,
+        )
+        self.moveit2.max_velocity = self.velocity_scaling
+        self.moveit2.max_acceleration = self.acceleration_scaling
+        self.get_logger().info(
+            f"Velocity scaling: {self.velocity_scaling:.2f}  "
+            f"Acceleration scaling: {self.acceleration_scaling:.2f}"
         )
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self, spin_thread=False)
@@ -843,12 +855,34 @@ class AceWriter(Node):
         return resolved
 
     def _load_plan(self):
-        """Load plan from letterCoordinates.json if it exists, else use hardcoded."""
-        if self.letter_coordinates_file and Path(self.letter_coordinates_file).exists():
+        """Load plan from letterCoordinates.json if it exists, else use hardcoded.
+
+        Also checks the sibling online/ workspace copy and uses whichever file
+        was modified most recently, so the node works regardless of which GUI
+        instance the user ran.
+        """
+        configured = Path(self.letter_coordinates_file) if self.letter_coordinates_file else None
+
+        # Build a list of candidate paths: configured path + known sibling copy.
+        candidates = []
+        if configured:
+            candidates.append(configured)
+        sibling = Path("/home/rosubu/ME_557_Robot/online/letterCoordinates.json")
+        if sibling not in candidates and sibling.exists():
+            candidates.append(sibling)
+
+        # Pick the candidate that exists and has the most recent mtime.
+        best: Path | None = None
+        for p in candidates:
+            if p.exists():
+                if best is None or p.stat().st_mtime > best.stat().st_mtime:
+                    best = p
+
+        if best is not None:
             try:
-                plan = self._build_plan_from_file(self.letter_coordinates_file)
+                plan = self._build_plan_from_file(str(best))
                 self.get_logger().info(
-                    f"Loaded {len(plan)} steps from {self.letter_coordinates_file}"
+                    f"Loaded {len(plan)} steps from {best}"
                 )
                 return plan
             except Exception as exc:

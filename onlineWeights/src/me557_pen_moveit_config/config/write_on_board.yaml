@@ -1,0 +1,49 @@
+board_writer:
+  ros__parameters:
+    # Match offline export defaults so online write_on_board runs against
+    # the same world-collision assumptions.
+    scene_setup_enabled: true
+    scene_setup_timeout_sec: 20.0
+    scene_board_enabled: false
+    scene_board_id: "writing_board"
+    scene_board_center_x: 0.4139  # 16.1" from base + 0.5cm half-thickness
+    scene_board_center_y: 0.0
+    scene_board_center_z: 0.2286
+    scene_board_size_x: 0.01
+    scene_board_size_y: 0.45
+    scene_board_size_z: 0.40
+    scene_table_enabled: false
+    scene_table_id: "writing_table"
+    scene_table_center_x: 0.0
+    scene_table_center_y: -0.34
+    scene_table_center_z: 0.10
+    scene_table_size_x: 0.60
+    scene_table_size_y: 0.60
+    scene_table_size_z: 0.05
+
+    # Use absolute board-space waypoints so the pen tip traces the full path.
+    relative_to_current_pose: false
+    relative_scale: 1.0
+    cartesian: true
+    weight_orientation: 1.0
+    tolerance_orientation: 0.25
+    max_joint_span_rad: 1.2
+
+    # --- Sim-to-real fidelity knobs ---
+    # These scale the joint_limits.yaml max values before MoveIt parameterizes
+    # the trajectory.  1.0 = use the full limit; 0.7 = 70% of limit.
+    # Reduce if the real robot can't track the planned profile:
+    #   velocity_scaling: 0.7 means servos get 30% headroom to recover from lag.
+    #   acceleration_scaling: 0.5 means gentler ramps at direction changes.
+    velocity_scaling: 0.8
+    acceleration_scaling: 0.6
+    # Rotate path in the board plane (+90 deg CCW about Z).
+    semantic_yaw_deg: 90.0
+    # Keep planning-scene board in base frame so it stays aligned with
+    # the planned path coordinates.
+    scene_frame_id: ""
+    workspace_enforce_x_bounds: false
+    workspace_x_min: -0.1778
+    workspace_x_max: 0.1778
+    workspace_z_min: 0.0
+    workspace_z_max: 10.0

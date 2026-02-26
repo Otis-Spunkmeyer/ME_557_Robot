@@ -1,5 +1,5 @@
 #include <Dynamixel2Arduino.h>
-#include <Servo.h>
+// #include <Servo.h>  // DISABLED — Servo.h timer conflicts with Dynamixel UART
 #include "trajectory_data.h"
 #include "moveItData.h"
 
@@ -8,20 +8,45 @@
 
 using namespace ControlTableItem;
 
+// Forward declaration — required so the Arduino IDE auto-generated prototype
+// for findMotor() compiles before struct RobotMotor is fully defined below.
+struct RobotMotor;
+
 Dynamixel2Arduino d2a(DXL_SERIAL);
 
 // PWM hobby servo on pin 3 — controlled as ID 7
-#define PEN_SERVO_PIN      3
-#define PEN_SERVO_HOME_DEG 90
-Servo penServo;
+// #define PEN_SERVO_PIN      3
+// #define PEN_SERVO_HOME_DEG 70
+// #define PEN_SERVO_GRAB_DEG 90
+// Servo penServo;
+// int g_penServoDeg = PEN_SERVO_HOME_DEG;  // tracks current pen servo position
+
+// Move the pen servo from its current position to targetDeg over durationMs.
+// DISABLED — Servo.h timer conflicts with Dynamixel UART
+// void penServoSweep(int targetDeg, unsigned long durationMs) {
+//   penServo.attach(PEN_SERVO_PIN);
+//   int startDeg = g_penServoDeg;
+//   int delta = targetDeg - startDeg;
+//   if (delta != 0) {
+//     int steps = abs(delta);
+//     unsigned long stepMs = durationMs / steps;
+//     if (stepMs < 1) stepMs = 1;
+//     int dir = (delta > 0) ? 1 : -1;
+//     for (int i = 1; i <= steps; i++) {
+//       penServo.write(startDeg + dir * i);
+//       delay(stepMs);
+//     }
+//     g_penServoDeg = targetDeg;
+//   }
+//   penServo.detach();
+// }
 
 // =============================================================================
 // CONFIGURATION — edit these values to tune robot behaviour
 // =============================================================================
 const int   HOME_SPEED         = 15;    // Speed when homing (seq 100 / startup)
 const int   MANUAL_SPEED       = 15;    // Speed in manual ID control mode
-const int   TRAJECTORY_SPEED   = 8;     // Speed during trajectory streaming — slow so moves take LONGER than the interval
-const int   ACCEL_SMOOTH       = 15;    // Profile acceleration — moderate ramp, allows smooth blending
+const int   TRAJECTORY_SPEED   = 10;     // Speed during trajectory streaming — slow so moves take LONGER than the interval
 
 // Trajectory playback
 // During a drawing segment keyframes are STREAMED at this interval.  The servo
@@ -29,7 +54,7 @@ const int   ACCEL_SMOOTH       = 15;    // Profile acceleration — moderate ram
 // its internal velocity profile blends smoothly through each waypoint.
 // Tune so the interval roughly matches how long each inter-keyframe move takes
 // at TRAJECTORY_SPEED — too short and servos lag; too long and they over-stop.
-const unsigned long  KEYFRAME_INTERVAL_MS = 30;  // ms between streamed keyframes
+const unsigned long  KEYFRAME_INTERVAL_MS = 50;  // ms between streamed keyframes
 // Extra settle time (ms) after all servos report stopped at a pause boundary.
 const unsigned long  SETTLE_MS            = 50;
 // Dwell time (ms) applied at draw<->travel boundary keyframes (pause flag).
@@ -38,17 +63,10 @@ const unsigned long  RETRACT_PAUSE_MS     = 500;
 // does not hang the sketch forever.
 const unsigned long  MOTION_TIMEOUT_MS    = 8000;
 
-// Per-servo PID overrides for servo 1 (base rotation).
-// This servo has an extra bearing load causing overshoot oscillation.
-// Lowering P reduces the aggressiveness of correction (less overshoot).
-// Adding D adds velocity-based damping that actively kills oscillation.
-// These only apply to XM/XH servos; AX-12 uses compliance slope instead.
-//   XM/XH defaults: P=800, I=0, D=0
-//   AX-12: compliance slope used instead (see applySmoothing)
-const int SERVO1_P_GAIN          = 400;   // < 800 default: reduce overshoot aggressiveness
-const int SERVO1_D_GAIN          = 400;   // > 0 default: add damping to kill oscillation
-const int SERVO1_I_GAIN          = 0;     // keep at 0 — I gain adds wind-up, worsens oscillation
-const int SERVO1_AX12_SLOPE      = 96;    // AX-12 only: softer compliance = less oscillation
+// Servo 1 (base) is AX-12A — compliance slope controls stiffness, not PID.
+// Softer slope = gentler approach to target = less bounce/overshoot.
+// Valid values: 2, 4, 8, 16, 32, 64, 128. Higher = softer.
+const int SERVO1_AX12_SLOPE      = 96;    // softer than default (32) — reduces oscillation
 
 // Per-servo compliance overrides for servo 4 (AX-12 with worst moment arm).
 // High load at a disadvantaged moment arm causes the servo to hunt:
@@ -109,8 +127,8 @@ RobotMotor* findMotor(uint8_t id) {
 }
 
 float rawToPhysicalDegrees(uint16_t model, int32_t raw) {
-  if (model == 12) return ((float)raw) * (300.0f / 1023.0f);   // AX-12: 10-bit / 300 deg
-  return ((float)raw) * (360.0f / 4095.0f);                    // XM/XH:  12-bit / 360 deg
+  if (model == 12)  return ((float)raw) * (300.0f / 1023.0f);  // AX-12A:  10-bit / 300 deg
+  return ((float)raw) * (360.0f / 4095.0f);                    // MX-64 (model 310): 12-bit / 360 deg
 }
 
 float logicalToPhysical(uint8_t id, float logicalAngle) {
@@ -138,6 +156,26 @@ bool readPresentLogical(uint8_t id, float &logicalOut, float &physicalOut) {
 float moveitRadToLogical(uint8_t idx, float rad) {
   const float RAD2DEG = 57.2957795f;
   return 180.0f + MOVEIT_DIR_SIGN[idx] * (rad - MOVEIT_HOME_RAD[idx]) * RAD2DEG;
+}
+
+// =============================================================================
+// ALARM RECOVERY
+// =============================================================================
+
+// Clear ALARM_SHUTDOWN on every servo by cycling torque.
+// An AX-12A/MX-64 that tripped overload/thermal shuts its output but keeps
+// responding to pings — it silently ignores every goal-position write until
+// torque is cycled.  Call this on startup and before any trajectory run.
+void clearAlarms() {
+  uint8_t allIds[] = {1, 2, 3, 4, 5, 6};
+  PC_SERIAL.println("Clearing alarms (torque cycle)...");
+  for (uint8_t id : allIds) {
+    if (!d2a.ping(id)) continue;
+    d2a.torqueOff(id);
+    delay(20);
+    d2a.torqueOn(id);
+  }
+  PC_SERIAL.println("Alarms cleared.");
 }
 
 // =============================================================================
@@ -181,20 +219,8 @@ void scanServos() {
       PC_SERIAL.print(" | I_GAIN=");       PC_SERIAL.print(iGain);
       PC_SERIAL.print(" | D_GAIN=");       PC_SERIAL.println(dGain);
     } else {
-      int32_t opMode   = d2a.readControlTableItem(OPERATING_MODE,      id);
-      int32_t profVel  = d2a.readControlTableItem(PROFILE_VELOCITY,    id);
-      int32_t profAcc  = d2a.readControlTableItem(PROFILE_ACCELERATION,id);
-      int32_t torqueEn = d2a.readControlTableItem(TORQUE_ENABLE,       id);
-      int32_t pGain    = d2a.readControlTableItem(POSITION_P_GAIN,     id);
-      int32_t dGain    = d2a.readControlTableItem(POSITION_D_GAIN,     id);
-      PC_SERIAL.print(" (XM/XH)");
-      PC_SERIAL.print(" | OPERATING_MODE=");      PC_SERIAL.print(opMode);
-      PC_SERIAL.print(opMode == 3 ? " (Position OK)" : " *** NOT POSITION MODE ***");
-      PC_SERIAL.print(" | TORQUE_ENABLE=");       PC_SERIAL.print(torqueEn);
-      PC_SERIAL.print(" | PROFILE_VELOCITY=");    PC_SERIAL.print(profVel);
-      PC_SERIAL.print(" | PROFILE_ACCEL=");       PC_SERIAL.print(profAcc);
-      PC_SERIAL.print(" | P_GAIN=");              PC_SERIAL.print(pGain);
-      PC_SERIAL.print(" | D_GAIN=");              PC_SERIAL.println(dGain);
+      PC_SERIAL.print(" (unknown model — expected AX-12A or MX-64)");
+      PC_SERIAL.println();
     }
   }
   PC_SERIAL.println("=== END SCAN ===");
@@ -211,7 +237,7 @@ void applySmoothing(uint8_t id, uint16_t model) {
   if (model == 12) {
     // AX-12: compliance slopes + margin
     int slope  = 32;
-    int margin = 1;
+    int margin = 3;  // wider default dead-zone — reduces hunting on IDs 5 & 6 under end-effector load
     if (id == 1) { slope = SERVO1_AX12_SLOPE; }
     if (id == 4) { slope = SERVO4_AX12_SLOPE; margin = SERVO4_AX12_MARGIN; }
     d2a.writeControlTableItem(CW_COMPLIANCE_SLOPE,   id, slope);
@@ -221,34 +247,20 @@ void applySmoothing(uint8_t id, uint16_t model) {
     PC_SERIAL.print(" | AX-12 slope="); PC_SERIAL.print(slope);
     PC_SERIAL.print(" margin="); PC_SERIAL.println(margin);
   } else if (model == 310) {
-    // MX-64A Protocol 1.0: uses PID gains + MOVING_SPEED (no compliance slopes,
-    // no OPERATING_MODE register — those only exist on Protocol 2.0 servos).
-    // NOTE: ControlTableItem::POSITION_P_GAIN maps to the Protocol 2.0 address
-    // (80), which is wrong for MX-64A Protocol 1.0 (P gain is at address 28).
-    // Leave PID at hardware defaults — they are fine for position control.
-    PC_SERIAL.println(" | MX-64A Proto1 OK (default PID)");
+    // MX-64 Protocol 1.0: MOVING_SPEED controls velocity.
+    // PID gains are at different register addresses in Protocol 1.0 vs 2.0 —
+    // leave them at hardware defaults to avoid mis-writing the wrong address.
+    PC_SERIAL.println(" | MX-64 Proto1 OK (default PID)");
   } else {
-    // XM/XH Protocol 2.0: OPERATING_MODE + PROFILE_VELOCITY/ACCELERATION + PID
-    d2a.torqueOff(id);
-    d2a.writeControlTableItem(OPERATING_MODE, id, 3);
-    int32_t modeReadBack = d2a.readControlTableItem(OPERATING_MODE, id);
-    PC_SERIAL.print(" | Set OPERATING_MODE=3, readback="); PC_SERIAL.print(modeReadBack);
-    PC_SERIAL.print(modeReadBack == 3 ? " OK" : " *** FAILED ***");
-    d2a.writeControlTableItem(PROFILE_ACCELERATION, id, ACCEL_SMOOTH);
-    if (id == 1) {
-      d2a.writeControlTableItem(POSITION_P_GAIN, id, SERVO1_P_GAIN);
-      d2a.writeControlTableItem(POSITION_D_GAIN, id, SERVO1_D_GAIN);
-      d2a.writeControlTableItem(POSITION_I_GAIN, id, SERVO1_I_GAIN);
-    }
-    PC_SERIAL.print(" | PROFILE_ACCEL="); PC_SERIAL.println(ACCEL_SMOOTH);
+    PC_SERIAL.println(" | (unknown model — no smoothing applied)");
   }
 }
 
 // Convert physical degrees to the servo's raw bit value.
 uint16_t physicalToRaw(uint16_t model, float physicalDegrees) {
   return (model == 12)
-    ? (uint16_t)(constrain(physicalDegrees, 0, 300) * (1023.0 / 300.0))
-    : (uint16_t)(constrain(physicalDegrees, 0, 360) * (4095.0 / 360.0));
+    ? (uint16_t)(constrain(physicalDegrees, 0, 300) * (1023.0 / 300.0))  // AX-12A
+    : (uint16_t)(constrain(physicalDegrees, 0, 360) * (4095.0 / 360.0)); // MX-64
 }
 
 // Low-level: write speed + goal position to a servo in physical degrees.
@@ -266,24 +278,14 @@ void executeMove(uint8_t id, float physicalDegrees, int speed) {
     smoothed[id] = true;
   }
 
-  // AX-12 (model 12) and MX-64A Protocol 1.0 (model 310) both use MOVING_SPEED.
-  // XM/XH Protocol 2.0 uses PROFILE_VELOCITY.
-  if (model == 12 || model == 310) {
-    d2a.writeControlTableItem(MOVING_SPEED, id, speed);
-    int32_t readBack = d2a.readControlTableItem(MOVING_SPEED, id);
-    PC_SERIAL.print("  [executeMove] ID="); PC_SERIAL.print(id);
-    PC_SERIAL.print(model == 12 ? " AX-12" : " MX-64A");
-    PC_SERIAL.print(" | set MOVING_SPEED="); PC_SERIAL.print(speed);
-    PC_SERIAL.print(" readback="); PC_SERIAL.print(readBack);
-    PC_SERIAL.print(" | goal_phys="); PC_SERIAL.println(physicalDegrees, 1);
-  } else {
-    d2a.writeControlTableItem(PROFILE_VELOCITY, id, speed);
-    int32_t readBack = d2a.readControlTableItem(PROFILE_VELOCITY, id);
-    PC_SERIAL.print("  [executeMove] ID="); PC_SERIAL.print(id);
-    PC_SERIAL.print(" XM/XH | set PROFILE_VELOCITY="); PC_SERIAL.print(speed);
-    PC_SERIAL.print(" readback="); PC_SERIAL.print(readBack);
-    PC_SERIAL.print(" | goal_phys="); PC_SERIAL.println(physicalDegrees, 1);
-  }
+  // AX-12A and MX-64 (Protocol 1.0) both use MOVING_SPEED.
+  d2a.writeControlTableItem(MOVING_SPEED, id, speed);
+  int32_t readBack = d2a.readControlTableItem(MOVING_SPEED, id);
+  PC_SERIAL.print("  [executeMove] ID="); PC_SERIAL.print(id);
+  PC_SERIAL.print(model == 12 ? " AX-12A" : " MX-64");
+  PC_SERIAL.print(" | set MOVING_SPEED="); PC_SERIAL.print(speed);
+  PC_SERIAL.print(" readback="); PC_SERIAL.print(readBack);
+  PC_SERIAL.print(" | goal_phys="); PC_SERIAL.println(physicalDegrees, 1);
   d2a.torqueOn(id);
   d2a.setGoalPosition(id, physicalToRaw(model, physicalDegrees));
 }
@@ -299,10 +301,7 @@ void prepareServosForTrajectory() {
     uint16_t model = m ? m->modelNumber : d2a.getModelNumber(id);
     applySmoothing(id, model);
     int spd = (id == 4) ? SERVO4_TRAJECTORY_SPEED : TRAJECTORY_SPEED;
-    if (model == 12 || model == 310)
-      d2a.writeControlTableItem(MOVING_SPEED,     id, spd);
-    else
-      d2a.writeControlTableItem(PROFILE_VELOCITY, id, spd);
+    d2a.writeControlTableItem(MOVING_SPEED, id, spd);  // AX-12A & MX-64 both use MOVING_SPEED
     d2a.torqueOn(id);
   }
 }
@@ -479,24 +478,8 @@ void jointControlMenu() {
     PC_SERIAL.print("  Locked: Joint "); PC_SERIAL.println(jointId);
 
     if (jointId == 7) {
-      // PWM hobby servo on pin 3
-      float lastAngle = PEN_SERVO_HOME_DEG;
-      while (true) {
-        PC_SERIAL.println("");
-        PC_SERIAL.print("  Joint 7 (pen servo) | Last: ");
-        PC_SERIAL.print((int)lastAngle);
-        PC_SERIAL.println(" deg");
-        PC_SERIAL.println("  Enter 0-180 (999 to back):");
-        while (PC_SERIAL.available() == 0);
-        float angle = PC_SERIAL.parseFloat();
-        while (PC_SERIAL.available() > 0) PC_SERIAL.read();
-        PC_SERIAL.println();
-        if ((int)angle == 999) break;
-        int deg = (int)constrain(angle, 0, 180);
-        penServo.write(deg);
-        PC_SERIAL.print("  -> "); PC_SERIAL.print(deg); PC_SERIAL.println(" deg");
-        lastAngle = (float)deg;
-      }
+      // PWM hobby servo on pin 3 — DISABLED (Servo.h timer conflict)
+      PC_SERIAL.println("  Joint 7 (pen servo) disabled — Servo.h commented out.");
     } else {
       // Dynamixel servo
       float logAngle = 180.0f, physAngle = 0.0f;
@@ -554,23 +537,28 @@ void playMoveitTrajectory() {
   PC_SERIAL.println("\n--- PLAYING TRAJECTORY ---");
   if (kTrajectoryCount == 0) { PC_SERIAL.println("No trajectory points loaded."); return; }
 
+  // penServoSweep(PEN_SERVO_GRAB_DEG, 1000);  // DISABLED
+  // PC_SERIAL.println("Pen servo -> GRAB");
+
+  clearAlarms();
   // Set speed, smoothing, and torque once for all servos before the loop.
-  // This cuts per-frame bus traffic from 15 writes to 5 (goal positions only),
-  // so all joints receive their commands nearly simultaneously — critical for
-  // smooth diagonal strokes.
   prepareServosForTrajectory();
 
   for (size_t i = 0; i < kTrajectoryCount; ++i) {
     const JointSample &p = kTrajectory[i];
 
-    // Compute physical targets then fire all 6 goal-position writes
-    // back-to-back with no other bus traffic in between.
-    sendGoalPosition(1, logicalToPhysical(1, moveitRadToLogical(0, p.j1_rad)));
-    sendGoalPosition(2, logicalToPhysical(2, moveitRadToLogical(1, p.j2l_rad)));
-    sendGoalPosition(3, logicalToPhysical(3, 360.0 - moveitRadToLogical(1, p.j2l_rad))); // mirror
-    sendGoalPosition(4, logicalToPhysical(4, moveitRadToLogical(2, p.j4_rad)));
-    sendGoalPosition(5, logicalToPhysical(5, moveitRadToLogical(3, p.j5_rad)));
-    sendGoalPosition(6, logicalToPhysical(6, moveitRadToLogical(4, p.j6_rad)));
+    // Single sync-write packet: all 6 joints commanded simultaneously.
+    {
+      float physicals[6] = {
+        logicalToPhysical(1, moveitRadToLogical(0, p.j1_rad)),
+        logicalToPhysical(2, moveitRadToLogical(1, p.j2l_rad)),
+        logicalToPhysical(3, 360.0 - moveitRadToLogical(1, p.j2l_rad)),
+        logicalToPhysical(4, moveitRadToLogical(2, p.j4_rad)),
+        logicalToPhysical(5, moveitRadToLogical(3, p.j5_rad)),
+        logicalToPhysical(6, moveitRadToLogical(4, p.j6_rad))
+      };
+      syncAllGoalPositions(physicals);
+    }
 
     if (p.pause == 1) {
       // Boundary keyframe (pen lift / touch-down): wait for the arm to
@@ -598,30 +586,27 @@ void playMoveitTrajectory() {
 // =============================================================================
 
 // Convert a planned joint velocity (rad/s from MoveIt) to a Dynamixel
-// Protocol 1.0 MOVING_SPEED value.  Protocol 1.0 speed units ≈ 0.111 RPM for
-// AX-12. A floor_speed ensures the servo always has enough torque authority
-// even when the planned velocity is near zero (e.g. at approach/departure).
-static uint16_t radsToSpeedUnits(float v_rads, uint16_t floor_speed) {
-  const float RADS_TO_UNITS = 86.0f;  // 1 rad/s ≈ 86 speed units (Protocol 1.0)
-  uint16_t computed = (uint16_t)(fabsf(v_rads) * RADS_TO_UNITS);
+// MOVING_SPEED register value, accounting for model-specific unit scales:
+//   Servos 1,4,5,6 — AX-12A  (model  12,  Protocol 1.0): 1 unit = 0.111 RPM ≈ 86.0 units/(rad/s)
+//   Servos 2,3     — MX-64   (model 310,  Protocol 1.0): 1 unit = 0.114 RPM ≈ 83.7 units/(rad/s)
+static uint16_t radsToSpeedUnits(float v_rads, uint16_t floor_speed, uint16_t model) {
+  float rtu = (model == 310) ? 83.7f : 86.0f;  // MX-64 vs AX-12A
+  uint16_t computed = (uint16_t)(fabsf(v_rads) * rtu);
   uint16_t result = (computed > floor_speed) ? computed : floor_speed;
   return (result < 300) ? result : 300;  // hard cap at 300 for safety
 }
 
 // Write the speed register for one servo.
-// AX-12 (12) and MX-64A Protocol 1.0 (310) both use MOVING_SPEED.
-// XM/XH Protocol 2.0 uses PROFILE_VELOCITY.
+// AX-12A and MX-64 (Protocol 1.0) both use MOVING_SPEED.
 static void setServoSpeed(uint8_t id, uint16_t speed) {
-  RobotMotor* m = findMotor(id);
-  uint16_t model = m ? m->modelNumber : 0;
-  if (model == 12 || model == 310)
-    d2a.writeControlTableItem(MOVING_SPEED,     id, speed);
-  else
-    d2a.writeControlTableItem(PROFILE_VELOCITY, id, speed);
+  d2a.writeControlTableItem(MOVING_SPEED, id, speed);
 }
 
 void playMoveitDynamicTrajectory() {
   PC_SERIAL.println("\n--- PLAYING DYNAMIC TRAJECTORY (777) ---");
+  // penServoSweep(PEN_SERVO_GRAB_DEG, 1000);  // DISABLED
+  // PC_SERIAL.println("Pen servo -> GRAB");
+  clearAlarms();
   if (kDynTrajectoryCount == 0) {
     PC_SERIAL.println("No dynamic trajectory loaded. Run export tool with --output-moveit.");
     return;
@@ -657,11 +642,25 @@ void playMoveitDynamicTrajectory() {
     // --- Per-keyframe speed (from MoveIt planned velocities) ---
     // Servo 4 gets a higher floor because it fights gravity at the worst
     // moment arm — too low and it stalls before reaching the target.
-    uint16_t spd1 = radsToSpeedUnits(p.v1_rads,  5);
-    uint16_t spd2 = radsToSpeedUnits(p.v2l_rads, 5);
-    uint16_t spd4 = radsToSpeedUnits(p.v4_rads,  SERVO4_TRAJECTORY_SPEED);
-    uint16_t spd5 = radsToSpeedUnits(p.v5_rads,  5);
-    uint16_t spd6 = radsToSpeedUnits(p.v6_rads,  5);
+    // Model numbers are cached in motors[].modelNumber so the right
+    // unit scale is used for each servo protocol (see radsToSpeedUnits).
+    // Model numbers are cached during the setup loop above — these fallbacks
+    // match the known hardware in case a servo didn't respond to getModelNumber.
+    uint16_t m1  = findMotor(1) ? findMotor(1)->modelNumber : 12;   // AX-12A
+    uint16_t m2  = findMotor(2) ? findMotor(2)->modelNumber : 310;  // MX-64
+    uint16_t m4  = findMotor(4) ? findMotor(4)->modelNumber : 12;   // AX-12A
+    uint16_t m5  = findMotor(5) ? findMotor(5)->modelNumber : 12;   // AX-12A
+    uint16_t m6  = findMotor(6) ? findMotor(6)->modelNumber : 12;   // AX-12A
+    uint16_t spd1 = radsToSpeedUnits(p.v1_rads,  5,                    m1);
+    uint16_t spd2 = radsToSpeedUnits(p.v2l_rads, 5,                    m2);
+    uint16_t spd4 = radsToSpeedUnits(p.v4_rads,  SERVO4_TRAJECTORY_SPEED, m4);
+    uint16_t spd5 = radsToSpeedUnits(p.v5_rads,  5,                    m5);
+    uint16_t spd6 = radsToSpeedUnits(p.v6_rads,  5,                    m6);
+
+    // Timestamp before bus writes so we can subtract the overhead from
+    // the inter-keyframe delay (each waypoint fires ~11 serial transactions
+    // at 1 Mbaud ≈ 1-3 ms, making delays consistently late without this).
+    unsigned long t_write_start = millis();
 
     setServoSpeed(1, spd1);
     setServoSpeed(2, spd2);
@@ -670,20 +669,24 @@ void playMoveitDynamicTrajectory() {
     setServoSpeed(5, spd5);
     setServoSpeed(6, spd6);
 
-    // --- Fire all goal positions back-to-back, no other bus traffic between ---
-    sendGoalPosition(1, logicalToPhysical(1, moveitRadToLogical(0, p.j1_rad)));
-    sendGoalPosition(2, logicalToPhysical(2, moveitRadToLogical(1, p.j2l_rad)));
-    sendGoalPosition(3, logicalToPhysical(3, 360.0 - moveitRadToLogical(1, p.j2l_rad)));
-    sendGoalPosition(4, logicalToPhysical(4, moveitRadToLogical(2, p.j4_rad)));
-    sendGoalPosition(5, logicalToPhysical(5, moveitRadToLogical(3, p.j5_rad)));
-    sendGoalPosition(6, logicalToPhysical(6, moveitRadToLogical(4, p.j6_rad)));
+    // Single sync-write packet: all 6 joints commanded simultaneously.
+    {
+      float physicals[6] = {
+        logicalToPhysical(1, moveitRadToLogical(0, p.j1_rad)),
+        logicalToPhysical(2, moveitRadToLogical(1, p.j2l_rad)),
+        logicalToPhysical(3, 360.0 - moveitRadToLogical(1, p.j2l_rad)),
+        logicalToPhysical(4, moveitRadToLogical(2, p.j4_rad)),
+        logicalToPhysical(5, moveitRadToLogical(3, p.j5_rad)),
+        logicalToPhysical(6, moveitRadToLogical(4, p.j6_rad))
+      };
+      syncAllGoalPositions(physicals);
+    }
 
     // --- Timing ---
     // At pause boundaries (pen lift/plant) wait for full stop + settle.
     // At draw-to-draw corners (pause==2) wait for full stop but no dwell.
-    // Between normal waypoints, delay exactly MoveIt's planned dt so the
-    // servo receives the next command while still on its velocity ramp —
-    // the arm traces the planned path instead of stopping at each waypoint.
+    // Between normal waypoints, delay exactly MoveIt's planned dt minus the
+    // time already spent on bus writes, so the total cycle matches the plan.
     if (p.pause == 1) {
       waitForMotionComplete();
       PC_SERIAL.print("Boundary pause at keyframe "); PC_SERIAL.println(i);
@@ -693,7 +696,11 @@ void playMoveitDynamicTrajectory() {
       waitForMotionComplete();
       PC_SERIAL.print("Corner settle at keyframe "); PC_SERIAL.println(i);
     } else {
-      delay(p.dt_ms);
+      unsigned long elapsed = millis() - t_write_start;
+      if (p.dt_ms > (uint16_t)(elapsed + 1)) {
+        delay(p.dt_ms - (uint16_t)elapsed);
+      }
+      // If bus writes took >= dt_ms, skip the delay — don't fall further behind.
     }
   }
   PC_SERIAL.println("--- DONE ---");
@@ -701,19 +708,20 @@ void playMoveitDynamicTrajectory() {
 
 void setup() {
   PC_SERIAL.begin(1000000);
-  while (!PC_SERIAL);
+  // 3-second timeout — runs headless (no serial monitor) without blocking
+  { unsigned long _t = millis(); while (!PC_SERIAL && (millis() - _t) < 3000); }
   d2a.begin(1000000);
   d2a.setPortProtocolVersion(1.0);
 
   PC_SERIAL.println("--- SYSTEM INITIALIZED ---");
   scanServos();
+  clearAlarms();
   homeAllMotors();
   scanServos();  // second scan: confirm registers after homing write
 
-  // Attach and home the PWM servo on pin 3 (ID 7)
-  penServo.attach(PEN_SERVO_PIN);
-  penServo.write(PEN_SERVO_HOME_DEG);
-  PC_SERIAL.println("Pen servo (ID 7, pin 3) homed to 90 deg.");
+  // Set initial pen servo position — DISABLED (Servo.h timer conflict)
+  // penServoSweep(PEN_SERVO_HOME_DEG, 0);
+  // PC_SERIAL.println("Pen servo (ID 7, pin 3) set to " + String(PEN_SERVO_HOME_DEG) + " deg.");
 
   printMainMenu();
 }
@@ -732,9 +740,11 @@ void loop() {
     } else if (inputCode == 555) {
       playMoveitTrajectory();
       homeAllMotors();
+      // penServoSweep(PEN_SERVO_HOME_DEG, 1000);  // DISABLED
     } else if (inputCode == 777) {
       playMoveitDynamicTrajectory();
       homeAllMotors();
+      // penServoSweep(PEN_SERVO_HOME_DEG, 1000);  // DISABLED
     } else {
       PC_SERIAL.println("Invalid input.");
     }

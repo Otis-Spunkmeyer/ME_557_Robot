@@ -23,8 +23,10 @@ Output: letterCoordinates.json in the same directory as this script.
 import json
 import os
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import messagebox, simpledialog
 
+# ── Saved-paths directory ────────────────────────────────────────────────────
+SAVED_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "saved_paths")
 # ── Board / workspace limits ─────────────────────────────────────────────────
 # Board is 13 in wide (centred) × 10 in tall, bottom edge 2.75 in off the ground.
 # Lateral (X): −6.5 → +6.5 in    Height (Z, relative to board bottom): 0 → 10 in
@@ -247,6 +249,24 @@ class LetterCoordinateMaker:
             font=("Courier", 12, "bold"), relief=tk.FLAT,
             width=20, height=2,
             command=self._cmd_done,
+        ).pack(pady=4)
+
+        tk.Button(
+            panel, text="[S] Save As Named...",
+            bg="#002233", fg="#00ccff",
+            activebackground="#003344", activeforeground="#44ddff",
+            font=("Courier", 10, "bold"), relief=tk.FLAT,
+            width=20, height=2,
+            command=self._cmd_save_named,
+        ).pack(pady=4)
+
+        tk.Button(
+            panel, text="[L] Load Named...",
+            bg="#221133", fg="#cc88ff",
+            activebackground="#332244", activeforeground="#ddaaff",
+            font=("Courier", 10), relief=tk.FLAT,
+            width=20, height=2,
+            command=self._cmd_load_named,
         ).pack(pady=4)
 
         tk.Label(panel, text="Segments:", bg=COL_BG, fg=COL_LABEL,
@@ -533,6 +553,104 @@ class LetterCoordinateMaker:
             "Trigger the robot to replay."
         )
         self.status_var.set(f"Saved {len(self.segments)} segment(s)!")
+
+    def _cmd_save_named(self):
+        """Save current segments to a named file in saved_paths/ AND update
+        letterCoordinates.json so trigger_write immediately uses this path."""
+        if not self.segments:
+            messagebox.showwarning("No segments", "Draw at least one segment first.")
+            return
+        name = simpledialog.askstring(
+            "Save As Named",
+            "Enter a name for this path:\n(letters, numbers, underscores)",
+            parent=self.root,
+        )
+        if not name:
+            return
+        # Sanitise: keep only safe characters
+        safe = "".join(c for c in name if c.isalnum() or c in "_-").strip()
+        if not safe:
+            messagebox.showerror("Invalid name", "Name must contain letters or numbers.")
+            return
+        os.makedirs(SAVED_DIR, exist_ok=True)
+        dest = os.path.join(SAVED_DIR, f"{safe}.json")
+        data = {"name": safe, "segments": self.segments}
+        with open(dest, "w") as f:
+            json.dump(data, f, indent=2)
+        # Also push to letterCoordinates.json so trigger_write picks it up
+        with open(OUTPUT_FILE, "w") as f:
+            json.dump(data, f, indent=2)
+        messagebox.showinfo(
+            "Saved!",
+            f"Saved as '{safe}'\n→ {dest}\n\nAlso copied to letterCoordinates.json."
+        )
+        self.status_var.set(f"Saved as '{safe}'.")
+
+    def _cmd_load_named(self):
+        """Show a list of saved paths and load the selected one."""
+        os.makedirs(SAVED_DIR, exist_ok=True)
+        files = sorted(f for f in os.listdir(SAVED_DIR) if f.endswith(".json"))
+        if not files:
+            messagebox.showinfo("No Saved Paths", f"No saved paths found in:\n{SAVED_DIR}")
+            return
+        # Build a small selection dialog
+        win = tk.Toplevel(self.root)
+        win.title("Load Named Path")
+        win.configure(bg=COL_BG)
+        win.resizable(False, False)
+        win.grab_set()
+        tk.Label(win, text="Select a saved path:", bg=COL_BG, fg=COL_LABEL,
+                 font=("Courier", 11, "bold")).pack(padx=20, pady=(15, 5))
+        listbox = tk.Listbox(win, bg="#1a1a2e", fg=COL_HOVER,
+                             font=("Courier", 11), selectbackground="#003355",
+                             width=30, height=min(len(files), 12))
+        for fname in files:
+            listbox.insert(tk.END, fname[:-5])  # strip .json
+        listbox.pack(padx=20, pady=5)
+        listbox.selection_set(0)
+
+        def _do_load():
+            sel = listbox.curselection()
+            if not sel:
+                return
+            chosen = files[sel[0]]
+            try:
+                with open(os.path.join(SAVED_DIR, chosen)) as fh:
+                    data = json.load(fh)
+                segs = data.get("segments", [])
+                if not segs:
+                    raise ValueError("File contains no segments.")
+                if not messagebox.askyesno(
+                    "Replace?",
+                    f"Load '{chosen[:-5]}' ({len(segs)} segments)?\n"
+                    "This will replace current canvas.",
+                    parent=win,
+                ):
+                    return
+                self.segments = segs
+                self.chain_tail = None
+                # Copy to letterCoordinates.json so trigger_write uses it
+                with open(OUTPUT_FILE, "w") as fh:
+                    json.dump(data, fh, indent=2)
+                self.status_var.set(
+                    f"Loaded '{chosen[:-5]}'\n({len(segs)} segments).\n\n"
+                    "letterCoordinates.json\nupdated."
+                )
+                self._update_seg_list()
+                self._refresh()
+                win.destroy()
+            except Exception as exc:
+                messagebox.showerror("Load failed", str(exc), parent=win)
+
+        btn_frame = tk.Frame(win, bg=COL_BG)
+        btn_frame.pack(pady=10)
+        tk.Button(btn_frame, text="Load", bg="#003300", fg="#00ff88",
+                  font=("Courier", 11, "bold"), relief=tk.FLAT,
+                  command=_do_load).pack(side=tk.LEFT, padx=8)
+        tk.Button(btn_frame, text="Cancel", bg="#222222", fg="#aaaaaa",
+                  font=("Courier", 10), relief=tk.FLAT,
+                  command=win.destroy).pack(side=tk.LEFT, padx=8)
+        self.root.wait_window(win)
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 
