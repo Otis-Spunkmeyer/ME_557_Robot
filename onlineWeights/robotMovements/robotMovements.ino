@@ -24,63 +24,69 @@ int g_penServoDeg = PEN_SERVO_HOME_DEG;  // tracks current pen servo position
 // CONFIGURATION — all tunable values in one place
 // =============================================================================
 
-// --- Speeds (Dynamixel MOVING_SPEED units, roughly 0–300) -------------------
-// AX-12A:  1 unit ≈ 0.111 RPM    MX-64A:  1 unit ≈ 0.114 RPM
-const int HOME_SPEED              = 15;  // Homing and code-0 moves
-const int MANUAL_SPEED            = 15;  // Joint control menu (code 100)
-const int TRAJECTORY_SPEED        = 10;  // Streaming keyframes (555 mode)
-                                         //   Lower = slower = smoother blending
-const int TRAJECTORY_START_SPEED  = HOME_SPEED + 5;       // Move to first keyframe — gentle enough to avoid lurch
-const int SERVO4_TRAJECTORY_SPEED = 15;  // Joint 4 override — needs extra torque
-                                          // against gravity when arm is extended
-const int SERVO23_TRAJECTORY_SPEED = 20; // Joints 2/3 override — MX-64 shoulder pair,
-                                          // heaviest loaded joints; needs higher speed
-                                          // to avoid stalling under arm weight
-// --- Trajectory timing (ms) -------------------------------------------------
-const unsigned long MIN_STREAM_INTERVAL_MS = 20; // 555 mode: minimum inter-waypoint delay (ms).
-                                                  //   We preserve MoveIt's planned dt_ms whenever
-                                                  //   possible and only clamp extremely small gaps
-                                                  //   to keep serial update cadence reliable.
-const unsigned long SETTLE_MS            = 60;   // Extra wait after MOVING clears
-const unsigned long MOTION_TIMEOUT_MS    = 1200; // Hard timeout for waitForMotionComplete
-const unsigned long CORNER_TIMEOUT_MS    = 3000; // Longer timeout for sharp corner settles.
-const unsigned long CONTACT_PAUSE_MS     = 300;  // Dwell at each pen-lift / pen-plant boundary
-                                                  //   (pause==1 waypoints: retract and touch-down).
-const unsigned long PAUSE_POINT_MS       = 500; // Dwell (ms) when the arm reaches a user-defined
-                                                  //   pause=3 waypoint in the trajectory header.
-                                                  //   Set to any duration you need; exported via
-                                                  //   the PAUSE POINT tool in letterCoordinateMaker.
-const bool ENABLE_CORNER_FULL_STOPS      = true;  // pause=2 handling. true = full-stop at corners.
-const bool ENABLE_USER_PAUSE_POINTS       = true; // pause=3 handling. false = ignore pause=3 tags.
-const bool ENABLE_BIG_DELTA_CORNER_STOPS = true;  // Also stop for large direction changes without pause tags.
-const float BIG_DELTA_CORNER_RAD         = 0.10f; // ~5.7 deg threshold (joint-space max delta).
-const int MX_TRAJECTORY_GOAL_ACCEL       = 20;   // MX-64 Goal Acceleration (addr 73, Proto 1.0).
-                                                  //   Limits jerk at direction changes during
-                                                  //   trajectory playback.
+// --- GLOBAL — shared by homing, manual mode, and all trajectory modes -------
 
-// --- AX-12A compliance per servo -------------------------------------------
-// Slope: torque ramp near target. Higher = softer spring = less overshoot.
-//   Valid values: 2, 4, 8, 16, 32, 64, 128
-// Margin: dead-zone (raw encoder units) where zero torque is applied.
-//   0 = fight every micro-error (buzzing)   1-3 = typical   5+ = ignore noise
-// MX-64 (IDs 2, 3) are PID-controlled — slope/margin do not apply to them.
+// Speeds (Dynamixel MOVING_SPEED units).  AX-12A: 1 unit ≈ 0.111 RPM  MX-64: 1 unit ≈ 0.114 RPM
+const int HOME_SPEED              = 15;  // Homing moves and code-0 reset
+const int MANUAL_SPEED            = 15;  // Joint control menu (code 100)
+
+const unsigned long SETTLE_MS         = 60;   // Extra wait after MOVING flag clears
+const unsigned long MOTION_TIMEOUT_MS = 1200; // Hard timeout for waitForMotionComplete()
+const unsigned long PAUSE_POINT_MS    = 500;  // Dwell (ms) at user-defined pause=3 waypoints
+                                              //   (used by both 555 and 888)
+
+// AX-12A compliance — Slope: torque ramp near target (2/4/8/16/32/64/128 only).
+//   Margin: dead-zone in raw encoder units.  0 = buzz, 1-3 = typical, 5+ = ignore noise.
+//   MX-64 (IDs 2, 3) use PID — slope/margin do not apply.
 struct ServoCompliance { uint8_t id; int slope; int margin; };
 const ServoCompliance SERVO_COMPLIANCE[] = {
   // id  slope  margin
   {  1,    32,     2  },  // AX-12A — base rotation
-  {  4,    32,     2  },  // AX-12A — elbow, wider margin damps gravity hunt
-  {  5,     32,     3  },  // AX-12A — wrist pitch
-  {  6,     32,     3  },  // AX-12A — wrist roll
+  {  4,    32,     2  },  // AX-12A — elbow (wider margin damps gravity hunt)
+  {  5,    32,     3  },  // AX-12A — wrist pitch
+  {  6,    32,     3  },  // AX-12A — wrist roll
 };
 
-// --- Ready position (logical degrees, before each trajectory run) -----------
-// Recorded via limp-mode read.  The arm moves here before executing 555
-// so it starts from a known, safe intermediate pose.
+// Ready position (logical degrees) — arm moves here before every trajectory run.
 const float READY_J1 = 180.0f;
-const float READY_J2 = 215.0f;  // ID 3 is mirrored automatically to 360 - READY_J2
+const float READY_J2 = 215.0f;  // ID 3 mirrors automatically to 360 - READY_J2
 const float READY_J4 =  60.0f;
 const float READY_J5 = 180.0f;
 const float READY_J6 = 225.0f;
+
+// --- 555 MODE — timed MoveIt trajectory playback ----------------------------
+
+// Speeds
+const int TRAJECTORY_SPEED         = 10; // Base speed for all joints — lower = smoother blending
+const int TRAJECTORY_START_SPEED   = HOME_SPEED + 5; // First-keyframe move — gentle to avoid lurch
+const int SERVO4_TRAJECTORY_SPEED  = 15; // Joint 4 override — extra torque against gravity
+const int SERVO23_TRAJECTORY_SPEED = 20; // Joints 2/3 override — MX-64s stall at low speed under arm weight
+const int MX_TRAJECTORY_GOAL_ACCEL = 20; // MX-64 Goal Acceleration (addr 73) — limits jerk at direction changes
+
+// Timing
+const unsigned long MIN_STREAM_INTERVAL_MS   = 20;   // Floor for dt_ms between keyframes — prevents serial flooding
+const unsigned long CORNER_TIMEOUT_MS        = 3000; // Longer waitForMotionComplete timeout at corners
+const unsigned long CONTACT_PAUSE_MS         = 50;   // Dwell at pen-lift boundary (draw→travel, pause=1).
+                                                     //   Kept short: the arm must move away immediately.
+const unsigned long PLANT_PAUSE_MS           = 300;  // Dwell at pen-plant boundary (travel→draw, pause=1).
+                                                     //   Lets the arm settle before drawing starts.
+
+// Corner/stop behaviour
+const bool  ENABLE_CORNER_FULL_STOPS      = true;   // pause=2: full-stop at tagged corners
+const bool  ENABLE_USER_PAUSE_POINTS      = true;   // pause=3: honour user pause tags (false = skip)
+const bool  ENABLE_BIG_DELTA_CORNER_STOPS = true;   // Auto-stop on large untagged direction changes
+const float BIG_DELTA_CORNER_RAD          = 0.30f;  // ~17 deg threshold for auto corner detection
+                                                     //   (was 0.10 — caused false stops on horizontal
+                                                     //   strokes where MoveIt emits J2 Δ≈0.10 rad/step)
+
+// --- 888 MODE — fast bare-metal trajectory playback -------------------------
+
+// AX-12A / MX-64 max is 1023 units (~114 RPM).  Values below that leave headroom.
+const int RAW_SPEED        = 50; // All joints
+const int RAW_SERVO4_SPEED = 50; // Joint 4 override — slightly gentler under gravity load
+const int RAW_SERVO23_SPEED= 50; // Joints 2/3 override — MX-64 shoulder pair
+
+const unsigned long RAW_FRAME_TIMEOUT_MS = 4000; // Per-frame MOVING-flag wait ceiling (safety only)
 
 // --- Per-motor calibration --------------------------------------------------
 // physicalOffset: value added to shift logical 180° to the servo's physical zero.
@@ -332,6 +338,18 @@ bool isAnyServoMoving() {
   return false;
 }
 
+// Lightweight per-frame arrival wait: polls MOVING flag until all servos stop
+// or timeout_ms elapses. No settle delay — used between keyframes in 888 mode
+// where we want to advance as soon as the arm has physically reached the target.
+void waitForFrameReached(unsigned long timeout_ms) {
+  delay(20);  // brief startup window so MOVING has time to assert
+  unsigned long limit = millis() + timeout_ms;
+  while (millis() < limit) {
+    if (!isAnyServoMoving()) return;
+    delay(5);
+  }
+}
+
 // Block until all servos have stopped (MOVING flag clears), then wait SETTLE_MS.
 // Exits early after timeoutMs if the flag never clears.
 void waitForMotionComplete(unsigned long timeoutMs = MOTION_TIMEOUT_MS) {
@@ -374,12 +392,21 @@ void syncAllGoalPositions(float physicals[6]) {
   static const uint16_t GOAL_POS_ADDR = 30;  // same address on AX-12A and MX-64 (Proto 1)
 
   // Queue each servo's goal without triggering motion.
+  // delayMicroseconds() after each regWrite gives the half-duplex RS-485 bus
+  // time to switch TX→RX direction and the servo time to latch the packet
+  // before the next packet arrives.  Without this, motor 4 (4th packet) can
+  // miss its queue write when the bus is also being polled for MOVING flags.
   for (int i = 0; i < 6; i++) {
     RobotMotor* m = findMotor(ids[i]);
+    // Populate modelNumber on first use (same lazy-init as executeMove).
+    // Without this, modelNumber stays 0, physicalToRaw falls into the MX-64
+    // branch, and AX-12As receive raw values > 1023 which they silently ignore.
+    if (m && m->modelNumber == 0) m->modelNumber = d2a.getModelNumber(ids[i]);
     uint16_t model = m ? m->modelNumber : 12;
     uint16_t raw = physicalToRaw(model, physicals[i]);
     uint8_t data[2] = { (uint8_t)(raw & 0xFF), (uint8_t)(raw >> 8) };
     d2a.regWrite(ids[i], GOAL_POS_ADDR, data, 2);
+    delayMicroseconds(500);  // bus direction settling between packets
   }
 
   // Fire all queued positions simultaneously.
@@ -409,7 +436,8 @@ void printMainMenu() {
   PC_SERIAL.println("  0   : Home all motors");
   PC_SERIAL.println("  100 : Joint control menu (1,2,4,5,6,7)");
   PC_SERIAL.println("  200 : Limp/read mode (torque off, ENTER reads positions, 999 exits)");
-  PC_SERIAL.println("  555 : Play trajectory (fixed speed)");
+  PC_SERIAL.println("  555 : Play trajectory (timed, with pauses)");
+  PC_SERIAL.println("  888 : Play trajectory (raw, no timing — pause=3 only)");
   PC_SERIAL.println("Enter code:");
 }
 
@@ -632,6 +660,10 @@ void playMoveitTrajectory() {
   PC_SERIAL.println("--- STARTING ---");
 
   bool previousWasPauseTag = false;  // collapse consecutive pause-tagged waypoints
+  bool inLiftPhase = false;     // true between draw→travel and travel→draw pause=1 boundaries
+  uint8_t liftBoundaryCount = 0; // counts pause=1 executions while in lift phase.
+                                 // 3 boundaries per retract event (draw→travel, travel→travel,
+                                 // travel→draw); exit lift phase after the 3rd.
 
   for (size_t i = 0; i < kTrajectoryCount; ++i) {
     const JointSample &p = kTrajectory[i];
@@ -659,11 +691,46 @@ void playMoveitTrajectory() {
     }
 
     if (p.pause == 1 && executePauseHere) {
-      // Pen-lift / touch-down boundary: reach target, settle, then dwell.
-      syncAllGoalPositions(physicals);
-      waitForMotionComplete();
-      PC_SERIAL.print("Pen boundary at keyframe "); PC_SERIAL.println(i);
-      delay(CONTACT_PAUSE_MS);
+      // Pen-lift / touch-down boundary.
+      // There are 3 pause=1 checkpoints per retract event:
+      //   1. draw→travel  (enter lift phase — joints must stay in sync while
+      //                    the pen is still near the board)
+      //   2. travel→travel (midpoint, stay in per-frame-wait mode)
+      //   3. travel→draw  (exit lift phase, resume dt_ms pacing for drawing)
+      if (!inLiftPhase) {
+        inLiftPhase = true;
+        liftBoundaryCount = 1;
+        // Equalise MX-64 shoulder speed to AX-12A speed for the entire lift.
+        d2a.writeControlTableItem(MOVING_SPEED, 2, TRAJECTORY_SPEED);
+        d2a.writeControlTableItem(MOVING_SPEED, 3, TRAJECTORY_SPEED);
+        d2a.writeControlTableItem(MOVING_SPEED, 4, TRAJECTORY_SPEED);
+        // Apply clearance offset now — inLiftPhase was false when physicals
+        // was computed above so we patch it here before sending.
+        syncAllGoalPositions(physicals);
+        waitForMotionComplete();
+        PC_SERIAL.print("Pen lift-off at keyframe "); PC_SERIAL.println(i);
+        delay(CONTACT_PAUSE_MS);
+      } else {
+        liftBoundaryCount++;
+        if (liftBoundaryCount >= 3) {  // checkpoint 3: touch-down before drawing
+          inLiftPhase = false;
+          liftBoundaryCount = 0;
+          // Restore speeds for drawing.
+          d2a.writeControlTableItem(MOVING_SPEED, 2, SERVO23_TRAJECTORY_SPEED);
+          d2a.writeControlTableItem(MOVING_SPEED, 3, SERVO23_TRAJECTORY_SPEED);
+          d2a.writeControlTableItem(MOVING_SPEED, 4, SERVO4_TRAJECTORY_SPEED);
+          syncAllGoalPositions(physicals);
+          waitForMotionComplete();
+          PC_SERIAL.print("Pen touch-down at keyframe "); PC_SERIAL.println(i);
+          delay(PLANT_PAUSE_MS);
+        } else {
+          // checkpoint 2: mid-travel
+          syncAllGoalPositions(physicals);
+          waitForMotionComplete();
+          PC_SERIAL.print("Pen mid-travel at keyframe "); PC_SERIAL.println(i);
+          delay(CONTACT_PAUSE_MS);
+        }
+      }
     } else if ((p.pause == 2 && executePauseHere) || virtualCornerStop) {
       // Draw-to-draw corner. Full-stop mode is optional because it can be slow
       // if MOVING flags remain asserted under load.
@@ -687,13 +754,34 @@ void playMoveitTrajectory() {
         delay(interval);
       }
     } else {
-      // Normal waypoint OR collapsed back-to-back pause tag:
-      // preserve MoveIt-planned dt_ms; only clamp tiny gaps.
-      unsigned long interval = (p.dt_ms > MIN_STREAM_INTERVAL_MS) ? p.dt_ms : MIN_STREAM_INTERVAL_MS;
-      unsigned long t0 = millis();
-      syncAllGoalPositions(physicals);
-      unsigned long elapsed = millis() - t0;
-      if (interval > elapsed) delay(interval - elapsed);
+      if (inLiftPhase) {
+        // Between pause=1 boundaries (retract + travel arc): wait for every
+        // joint to physically arrive before sending the next target.  This
+        // keeps the Cartesian path intact despite speed differences between
+        // MX-64 shoulders and AX-12A elbow/wrist.
+        syncAllGoalPositions(physicals);
+        waitForMotionComplete();
+      } else {
+        // Normal drawing waypoint: preserve MoveIt-planned dt_ms; only clamp tiny gaps.
+        // Look-ahead: if the NEXT waypoint is a pause=1 boundary (entering a lift), ensure
+        // every joint fully arrives at this last drawing position before proceeding.
+        // Without this, faster MX-64 shoulders finish early and the arm drifts at the
+        // end of the stroke, dragging the pen as the lift begins.
+        bool nextIsPause1Boundary = false;
+        if (i + 1 < kTrajectoryCount) {
+          const JointSample &next = kTrajectory[i + 1];
+          nextIsPause1Boundary = (next.pause == 1) && !isPauseTag;
+        }
+        unsigned long interval = (p.dt_ms > MIN_STREAM_INTERVAL_MS) ? p.dt_ms : MIN_STREAM_INTERVAL_MS;
+        unsigned long t0 = millis();
+        syncAllGoalPositions(physicals);
+        if (nextIsPause1Boundary) {
+          waitForMotionComplete();
+        } else {
+          unsigned long elapsed = millis() - t0;
+          if (interval > elapsed) delay(interval - elapsed);
+        }
+      }
     }
 
     previousWasPauseTag = isPauseTag;
@@ -702,6 +790,65 @@ void playMoveitTrajectory() {
   // Wait for the last move to fully complete before the arm homes.
   waitForMotionComplete();
   PC_SERIAL.println("End of stroke — trajectory complete.");
+
+  PC_SERIAL.println("--- DONE ---");
+}
+
+// 888: Bare-metal trajectory playback. No timing, no motion polls, no waits.
+// Sends every keyframe to all servos simultaneously (REG_WRITE + ACTION) and
+// only stops at user-defined pause=3 points.
+void playRawTrajectory() {
+  PC_SERIAL.println("\n--- PLAYING RAW TRAJECTORY (888) ---");
+  if (kTrajectoryCount == 0) { PC_SERIAL.println("No trajectory points loaded."); return; }
+
+  // Set all servos to high speed before streaming.
+  uint8_t allIds[] = {1, 2, 3, 4, 5, 6};
+  for (uint8_t id : allIds) {
+    int spd = (id == 4) ? RAW_SERVO4_SPEED
+            : (id == 2 || id == 3) ? RAW_SERVO23_SPEED
+            : RAW_SPEED;
+    d2a.writeControlTableItem(MOVING_SPEED, id, spd);
+    d2a.torqueOn(id);
+  }
+  PC_SERIAL.println("Speeds set to RAW (fast).");
+
+  for (size_t i = 0; i < kTrajectoryCount; ++i) {
+    const JointSample &p = kTrajectory[i];
+
+    float physicals[6] = {
+      logicalToPhysical(1, moveitRadToLogical(0, p.j1_rad)),
+      logicalToPhysical(2, moveitRadToLogical(1, p.j2l_rad)),
+      logicalToPhysical(3, 360.0 - moveitRadToLogical(1, p.j2l_rad)),
+      logicalToPhysical(4, moveitRadToLogical(2, p.j4_rad)),
+      logicalToPhysical(5, moveitRadToLogical(3, p.j5_rad)),
+      logicalToPhysical(6, moveitRadToLogical(4, p.j6_rad))
+    };
+
+    syncAllGoalPositions(physicals);
+
+    // pause=1 → pen-lift or pen-plant boundary.  Always wait for the arm to
+    // fully reach this position before continuing — at RAW speeds the planned
+    // dt_ms is irrelevant (arm arrives much faster) but the retract must be
+    // COMPLETE before any lateral travel begins, otherwise the spring-loaded
+    // pen tip still contacts the board and drags.
+    if (p.pause == 1) {
+      waitForMotionComplete(CORNER_TIMEOUT_MS);
+      delay(CONTACT_PAUSE_MS);   // short settle after retract / plant
+    }
+    // pause=3 → explicit user stop point.
+    else if (p.pause == 3) {
+      waitForMotionComplete();
+      PC_SERIAL.print("User pause at keyframe "); PC_SERIAL.println(i);
+      delay(PAUSE_POINT_MS);
+    }
+    // Normal frames: pace using MoveIt's planned dt_ms so the arm moves
+    // smoothly between keyframes without flooding the bus.
+    else {
+      unsigned long interval = (p.dt_ms > MIN_STREAM_INTERVAL_MS)
+                               ? p.dt_ms : MIN_STREAM_INTERVAL_MS;
+      delay(interval);
+    }
+  }
 
   PC_SERIAL.println("--- DONE ---");
 }
@@ -740,6 +887,11 @@ void loop() {
     } else if (inputCode == 555) {
       servoClose();
       playMoveitTrajectory();
+      homeAllMotors();
+      servoOpen();
+    } else if (inputCode == 888) {
+      servoClose();
+      playRawTrajectory();
       homeAllMotors();
       servoOpen();
     } else {

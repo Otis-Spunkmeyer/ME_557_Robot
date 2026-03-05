@@ -2,133 +2,250 @@
   "segments": [
     {
       "start": [
-        -4.0,
+        -1.5,
         2.0
       ],
       "end": [
-        -4.0,
-        1.0
+        -1.5,
+        5.0
       ],
       "lift_after": false,
-      "pause_point_start": true,
+      "pause_point_start": false,
+      "pause_point_end": false
+    },
+    {
+      "start": [
+        -1.5,
+        5.0
+      ],
+      "end": [
+        -1.0,
+        6.0
+      ],
+      "lift_after": false,
+      "pause_point_start": false,
       "pause_point_end": true
     },
     {
       "start": [
-        -4.0,
-        1.0
+        -1.0,
+        6.0
       ],
       "end": [
-        4.0,
-        1.0
+        0.0,
+        6.0
       ],
       "lift_after": false,
       "pause_point_start": true,
+      "pause_point_end": false
+    },
+    {
+      "start": [
+        0.0,
+        6.0
+      ],
+      "end": [
+        0.5,
+        5.0
+      ],
+      "lift_after": false,
+      "pause_point_start": false,
       "pause_point_end": true
     },
     {
       "start": [
-        4.0,
-        1.0
+        0.5,
+        5.0
       ],
       "end": [
-        4.0,
+        0.5,
         2.0
-      ],
-      "lift_after": false,
-      "pause_point_start": true,
-      "pause_point_end": true
-    },
-    {
-      "start": [
-        4.0,
-        2.0
-      ],
-      "end": [
-        -3.75,
-        2.0
-      ],
-      "lift_after": false,
-      "pause_point_start": true,
-      "pause_point_end": true
-    },
-    {
-      "start": [
-        -3.75,
-        2.0
-      ],
-      "end": [
-        -3.75,
-        1.25
-      ],
-      "lift_after": false,
-      "pause_point_start": true,
-      "pause_point_end": true
-    },
-    {
-      "start": [
-        -3.75,
-        1.25
-      ],
-      "end": [
-        3.75,
-        1.25
-      ],
-      "lift_after": false,
-      "pause_point_start": true,
-      "pause_point_end": true
-    },
-    {
-      "start": [
-        3.75,
-        1.25
-      ],
-      "end": [
-        3.75,
-        1.75
-      ],
-      "lift_after": false,
-      "pause_point_start": true,
-      "pause_point_end": true
-    },
-    {
-      "start": [
-        3.75,
-        1.75
-      ],
-      "end": [
-        -3.5,
-        1.75
-      ],
-      "lift_after": false,
-      "pause_point_start": true,
-      "pause_point_end": true
-    },
-    {
-      "start": [
-        -3.5,
-        1.75
-      ],
-      "end": [
-        -3.5,
-        1.5
-      ],
-      "lift_after": false,
-      "pause_point_start": true,
-      "pause_point_end": true
-    },
-    {
-      "start": [
-        -3.5,
-        1.5
-      ],
-      "end": [
-        3.5,
-        1.5
       ],
       "lift_after": true,
       "pause_point_start": true,
+      "pause_point_end": false
+    },
+    {
+      "start": [
+        -1.5,
+        4.0
+      ],
+      "end": [
+        0.5,
+        4.0
+      ],
+      "lift_after": true,
+      "pause_point_start": false,
+      "pause_point_end": false
+    },
+    {
+      "start": [
+        3.0,
+        6.0
+      ],
+      "end": [
+        2.0,
+        6.0
+      ],
+      "lift_after": false,
+      "pause_point_start": false,
+      "pause_point_end": false
+    },
+    {
+      "start": [
+        2.0,
+        6.0
+      ],
+      "end": [
+        1.5,
+        5.75
+      ],
+      "lift_after": false,
+      "pause_point_start": false,
+      "pause_point_end": false
+    },
+    {
+      "start": [
+        1.5,
+        5.75
+      ],
+      "end": [
+        1.0,
+        5.0
+      ],
+      "lift_after": false,
+      "pause_point_start": false,
       "pause_point_end": true
+    },
+    {
+      "start": [
+        1.0,
+        5.0
+      ],
+      "end": [
+        1.0,
+        3.0
+      ],
+      "lift_after": false,
+      "pause_point_start": true,
+      "pause_point_end": false
+    },
+    {
+      "start": [
+        1.0,
+        3.0
+      ],
+      "end": [
+        1.5,
+        2.25
+      ],
+      "lift_after": false,
+      "pause_point_start": false,
+      "pause_point_end": true
+    },
+    {
+      "start": [
+        1.5,
+        2.25
+      ],
+      "end": [
+        2.0,
+        2.0
+      ],
+      "lift_after": false,
+      "pause_point_start": true,
+      "pause_point_end": false
+    },
+    {
+      "start": [
+        2.0,
+        2.0
+      ],
+      "end": [
+        3.0,
+        2.0
+      ],
+      "lift_after": true,
+      "pause_point_start": false,
+      "pause_point_end": false
+    },
+    {
+      "start": [
+        5.0,
+        6.0
+      ],
+      "end": [
+        3.5,
+        6.0
+      ],
+      "lift_after": false,
+      "pause_point_start": false,
+      "pause_point_end": true
+    },
+    {
+      "start": [
+        3.5,
+        6.0
+      ],
+      "end": [
+        3.5,
+        5.75
+      ],
+      "lift_after": false,
+      "pause_point_start": true,
+      "pause_point_end": false
+    },
+    {
+      "start": [
+        3.5,
+        5.75
+      ],
+      "end": [
+        3.5,
+        2.0
+      ],
+      "lift_after": false,
+      "pause_point_start": false,
+      "pause_point_end": true
+    },
+    {
+      "start": [
+        3.5,
+        2.0
+      ],
+      "end": [
+        3.75,
+        2.0
+      ],
+      "lift_after": false,
+      "pause_point_start": true,
+      "pause_point_end": false
+    },
+    {
+      "start": [
+        3.75,
+        2.0
+      ],
+      "end": [
+        4.75,
+        2.0
+      ],
+      "lift_after": true,
+      "pause_point_start": false,
+      "pause_point_end": false
+    },
+    {
+      "start": [
+        3.25,
+        4.0
+      ],
+      "end": [
+        5.0,
+        4.0
+      ],
+      "lift_after": true,
+      "pause_point_start": false,
+      "pause_point_end": false
     }
   ]
 }

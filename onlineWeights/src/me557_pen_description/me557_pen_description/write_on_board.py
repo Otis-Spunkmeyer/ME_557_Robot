@@ -83,9 +83,21 @@ class AceWriter(Node):
         )
         self.declare_parameter("pen_lift_pause_sec", 0.2)
         self.declare_parameter("pen_lift_speed_scale", 0.3)
+        self.declare_parameter("pen_retract_forward_m", inch(14.5))
+        # pen_retract_forward_m: distance from robot base to the retracted pen position
+        # (measured along the same axis as forward_draw).  Must be < forward_draw.
+        # Default inch(14.5) = ~369mm.  If the spring-loaded tip still brushes the board
+        # during lateral travel, decrease this value (e.g. inch(13.0) or inch(12.0))
+        # to pull the arm further back before sweeping to the next letter.
+        self.declare_parameter("pen_clearance_z_m", 0.012)
+        # pen_clearance_z_m: retained for backwards-compatibility with existing YAML files.
+        # No longer used for the pen-retract waypoint.  The retract now keeps (lateral, z)
+        # fixed in semantic space so that the EE moves perpendicular to the board surface
+        # (along _board_normal_hat), giving a clean lift with no surface sliding.
+        # Increase if a short diagonal drag mark is still visible after the main fix.
         # Fraction of joint velocity/acceleration limits for planning.
         # Values < 1.0 leave headroom so the real servo can track the profile.
-        self.declare_parameter("velocity_scaling", 1.0)
+        self.declare_parameter("velocity_scaling", .75)
         self.declare_parameter("acceleration_scaling", 1.0)
         self.declare_parameter(
             "letter_coordinates_file",
@@ -122,13 +134,13 @@ class AceWriter(Node):
         self.declare_parameter("scene_board_corner_tl_y", -0.225)
         self.declare_parameter("scene_board_corner_tl_z",  0.4286)
         # Simple calibration block for quick trial-and-error tuning.
-        # This is now the default/primary board calibration path:
+        # When enabled, you only change:
         #   - distance from robot (applied to all corner X values)
         #   - vertical/horizontal tilt (degrees)
         self.declare_parameter("scene_board_use_calibration_block", True)
         self.declare_parameter("scene_board_distance_from_robot_m", 0.4139)
-        self.declare_parameter("scene_board_cal_tilt_vertical_deg", -5.0)
-        self.declare_parameter("scene_board_cal_tilt_horizontal_deg", 3.0)
+        self.declare_parameter("scene_board_cal_tilt_vertical_deg", 0.0)
+        self.declare_parameter("scene_board_cal_tilt_horizontal_deg", 0.0)
         # Tilt angles (degrees) — applied after corners are resolved
         self.declare_parameter("scene_board_tilt_vertical_deg",   0.0)
         self.declare_parameter("scene_board_tilt_horizontal_deg", 0.0)
@@ -198,6 +210,8 @@ class AceWriter(Node):
         )
         self.pen_lift_pause_sec = float(self.get_parameter("pen_lift_pause_sec").value)
         self.pen_lift_speed_scale = float(self.get_parameter("pen_lift_speed_scale").value)
+        self.pen_retract_forward_m = float(self.get_parameter("pen_retract_forward_m").value)
+        self.pen_clearance_z_m = float(self.get_parameter("pen_clearance_z_m").value)
         self.velocity_scaling = float(self.get_parameter("velocity_scaling").value)
         self.acceleration_scaling = float(self.get_parameter("acceleration_scaling").value)
         self.letter_coordinates_file = str(
@@ -261,30 +275,31 @@ class AceWriter(Node):
         self.scene_board_tilt_horizontal_deg = float(self.get_parameter("scene_board_tilt_horizontal_deg").value)
         self.scene_board_thickness           = float(self.get_parameter("scene_board_thickness").value)
 
-        # Apply calibration block unconditionally (default behavior).
-        # 1) Distance from robot: apply one X value to all four board corners.
-        # This keeps board width/height intact while moving the plane in/out.
-        x = self.scene_board_distance_from_robot_m
-        self.scene_board_corners = {
-            key: (x, value[1], value[2])
-            for key, value in self.scene_board_corners.items()
-        }
-        # 2) Tilt overrides from the quick calibration block.
-        self.scene_board_tilt_vertical_deg = self.scene_board_cal_tilt_vertical_deg
-        self.scene_board_tilt_horizontal_deg = self.scene_board_cal_tilt_horizontal_deg
+        if self.scene_board_use_calibration_block:
+            # 1) Distance from robot: apply one X value to all four board corners.
+            # This keeps board width/height intact while moving the plane in/out.
+            x = self.scene_board_distance_from_robot_m
+            self.scene_board_corners = {
+                key: (x, value[1], value[2])
+                for key, value in self.scene_board_corners.items()
+            }
+            # 2) Tilt overrides from the quick calibration block.
+            self.scene_board_tilt_vertical_deg = self.scene_board_cal_tilt_vertical_deg
+            self.scene_board_tilt_horizontal_deg = self.scene_board_cal_tilt_horizontal_deg
 
-        self.get_logger().info(
-            "[board_calibration] using calibration block (default): "
-            f"distance={self.scene_board_distance_from_robot_m:.4f} m, "
-            f"tilt_v={self.scene_board_tilt_vertical_deg:.2f}°, "
-            f"tilt_h={self.scene_board_tilt_horizontal_deg:.2f}°"
-        )
+            self.get_logger().info(
+                "[board_calibration] using calibration block: "
+                f"distance={self.scene_board_distance_from_robot_m:.4f} m, "
+                f"tilt_v={self.scene_board_tilt_vertical_deg:.2f}°, "
+                f"tilt_h={self.scene_board_tilt_horizontal_deg:.2f}°"
+            )
         # Compute the tilted board frame immediately so waypoint generation
         # uses the same orientation that is applied to the collision box.
         # Must be called after corners/tilts are stored; forward_draw is set
         # later in __init__, so store a temporary sentinel and recompute then.
-        self._board_centre      = None  # set by _setup_board_frame()
-        self._board_face_centre = None
+        self._board_centre       = None  # set by _setup_board_frame()
+        self._board_face_centre  = None
+        self._board_approach_hat = None  # pre-tilt normal (retract/extend direction)
         self._board_width_hat   = None
         self._board_height_hat  = None
         self._board_normal_hat  = None
@@ -415,7 +430,7 @@ class AceWriter(Node):
         # - lateral: left/right across the writing surface (mapped to world x)
         # - z: up/down (mapped to world z)
         self.forward_draw = inch(16.1)
-        self.forward_ret = inch(14.5)
+        self.forward_ret = self.pen_retract_forward_m
         # Now that forward_draw is known, build the board frame used for waypoint projection.
         self._setup_board_frame()
 
@@ -540,6 +555,17 @@ class AceWriter(Node):
                 [az*ax*(1-c) - ay*s,    az*ay*(1-c) + ax*s,   c + az*az*(1-c)   ],
             ])
 
+        # Cache the pre-tilt normal as the depth/retract direction before tilts are
+        # applied.  For a board whose untilted face normal = [1,0,0] (standard setup
+        # with corners all at the same X), this yields approach_hat = [1,0,0].
+        # Using this for the depth term in _world_from_semantic makes pen-retract moves
+        # go purely backward in world X — matching the 'online' (flat-board) behavior
+        # that was proven drag-free.  Using the tilted normal instead adds a Z component
+        # (-7.5 mm per 40 mm retract) which causes the spring tip to slide along the
+        # board surface as the tilt breaks the alignment between the spring axis and the
+        # board perpendicular.
+        approach_hat = normal_hat.copy()
+
         # Apply tilt_vertical_deg first (rotation about the board's width axis).
         if abs(self.scene_board_tilt_vertical_deg) > 1e-6:
             R = _rot_mat(width_hat, self.scene_board_tilt_vertical_deg)
@@ -555,10 +581,11 @@ class AceWriter(Node):
             normal_hat = R @ normal_hat
 
         # Store the tilted frame.
-        self._board_centre      = centre
-        self._board_width_hat   = width_hat
-        self._board_height_hat  = height_hat
-        self._board_normal_hat  = normal_hat
+        self._board_centre       = centre
+        self._board_width_hat    = width_hat
+        self._board_height_hat   = height_hat
+        self._board_normal_hat   = normal_hat
+        self._board_approach_hat = approach_hat  # pre-tilt normal: retract/extend direction
 
         # Board face = front writing surface (toward the robot).
         # The collision box is centred at *centre*; the pen tip touches the face:
@@ -570,6 +597,7 @@ class AceWriter(Node):
             f"[board_frame] centre=({centre[0]:.4f},{centre[1]:.4f},{centre[2]:.4f})  "
             f"face_centre=({self._board_face_centre[0]:.4f},{self._board_face_centre[1]:.4f},{self._board_face_centre[2]:.4f})  "
             f"normal_hat=({normal_hat[0]:.4f},{normal_hat[1]:.4f},{normal_hat[2]:.4f})  "
+            f"approach_hat=({approach_hat[0]:.4f},{approach_hat[1]:.4f},{approach_hat[2]:.4f})  "
             f"tilt_v={self.scene_board_tilt_vertical_deg:.2f}°  "
             f"tilt_h={self.scene_board_tilt_horizontal_deg:.2f}°"
         )
@@ -587,8 +615,10 @@ class AceWriter(Node):
         Absolute mode (anchor_semantic is None)
         ----------------------------------------
         Projects the 2-D board coordinate (lateral, z) onto the tilted board
-        plane, then offsets by (forward − forward_draw) along the board normal
-        to handle pen retract / extend moves.
+        plane, then offsets by (forward − forward_draw) along the tilted board
+        normal (_board_normal_hat) to handle pen retract / extend moves.  When
+        (lateral, z) are held fixed the retract is perpendicular to the board
+        surface, giving a clean pen lift with no sliding.
 
         Relative mode (anchor_semantic / anchor_world provided)
         ---------------------------------------------------------
@@ -625,10 +655,16 @@ class AceWriter(Node):
         #   P = _board_face_centre
         #       + u     × _board_width_hat
         #       + v     × _board_height_hat
-        #       + depth × _board_normal_hat
+        #       + depth × _board_approach_hat
         #
-        # For a flat, untilted board this reduces exactly to the original
-        # semantic-yaw formula (verified by unit check during development).
+        # IMPORTANT: depth uses _board_approach_hat (pre-tilt normal, ≈ world +X)
+        # NOT _board_normal_hat (tilted normal).  The tilted normal has a Z component
+        # which causes the spring tip to slide along the board surface during retract.
+        # The pre-tilt direction is the actual arm approach direction and gives a
+        # drag-free lift, matching the 'online' flat-board behavior.
+        #
+        # For a flat, untilted board _board_approach_hat == _board_normal_hat so
+        # this reduces exactly to the 'online' formula.
         u     = -lateral
         v     = z - float(self._board_centre[2])
         depth = forward - self.forward_draw
@@ -637,7 +673,7 @@ class AceWriter(Node):
             self._board_face_centre
             + u     * self._board_width_hat
             + v     * self._board_height_hat
-            + depth * self._board_normal_hat
+            + depth * self._board_approach_hat
         )
         return (
             float(pos[0]) + self.offset_x,
@@ -1178,7 +1214,7 @@ class AceWriter(Node):
             if last_err is not None:
                 self.get_logger().error(
                     f"{mode}: all retries failed for target x={tx:.4f} y={ty:.4f} z={tz:.4f}; "
-                    f"last_error={last_err}; keeping previous pose and continuing."
+                    "keeping previous pose and continuing."
                 )
                 return prev_xyz, False
             self.get_logger().error(
@@ -1317,8 +1353,11 @@ class AceWriter(Node):
             plan.append(("draw", (self.forward_draw, lat_end_m, z_end), pause_end))
 
             if lift_after:
-                # Retract from board cleanly at stroke end height (no board dragging)
-                plan.append(("travel", (self.forward_ret,  lat_end_m, z_end), False))
+                # Retract from the board.  Hold (lateral, z) FIXED in semantic
+                # space — only forward changes — so the EE moves perpendicular
+                # to the tilted board surface.  This gives a clean pen lift with
+                # no component along the board surface to drag the tip.
+                plan.append(("travel", (self.forward_ret, lat_end_m, z_end), False))
                 pen_is_down = False
                 # If this is the last segment, park high
                 if i == len(segments) - 1:
@@ -1332,8 +1371,8 @@ class AceWriter(Node):
             last = segments[-1]
             lat_end_m = last["end"][0] * 0.0254
             z_last_end = self.z_bot + inch(last["end"][1])
-            plan.append(("travel", (self.forward_ret,  lat_end_m, z_last_end), False))
-            plan.append(("travel", (self.forward_ret,  lat_end_m, self.z_top),  False))
+            plan.append(("travel", (self.forward_ret, lat_end_m, z_last_end), False))
+            plan.append(("travel", (self.forward_ret, lat_end_m, self.z_top),  False))
 
         return plan
 
