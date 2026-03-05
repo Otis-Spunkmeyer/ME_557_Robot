@@ -3,7 +3,7 @@
 # Only shows board_writer messages + ERRORs from other nodes
 
 source /opt/ros/humble/setup.bash
-colcon build --packages-select me557_pen_description me557_pen_moveit_config --event-handlers console_direct- 2>&1 | grep -E "(error|warning|finished|failed|Summary)" --color=never
+colcon build --symlink-install --packages-select me557_pen_description me557_pen_moveit_config --event-handlers console_direct- 2>&1 | grep -E "(error|warning|finished|failed|Summary)" --color=never
 echo ""
 echo "Build done. Launching..."
 echo ""

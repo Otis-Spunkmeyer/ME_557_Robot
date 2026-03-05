@@ -71,7 +71,7 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument(
                 "trajectory_header_output",
-                default_value="/home/rosubu/ME_557_Robot/online/robotMovements/trajectory_data.h",
+                default_value="/home/rosubu/ME_557_Robot/onlineWeights/robotMovements/trajectory_data.h",
                 description="Output header path written by write_on_board.",
             ),
             IncludeLaunchDescription(

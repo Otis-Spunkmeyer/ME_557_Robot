@@ -79,7 +79,7 @@ class AceWriter(Node):
         self.declare_parameter("plan_only_capture", False)
         self.declare_parameter(
             "trajectory_header_output",
-            "/home/rosubu/ME_557_Robot/online/robotMovements/trajectory_data.h",
+            "/home/rosubu/ME_557_Robot/onlineWeights/robotMovements/trajectory_data.h",
         )
         self.declare_parameter("pen_lift_pause_sec", 0.2)
         self.declare_parameter("pen_lift_speed_scale", 0.3)
@@ -106,6 +106,34 @@ class AceWriter(Node):
         self.declare_parameter("scene_board_size_x", inch(13))
         self.declare_parameter("scene_board_size_y", 0.01)
         self.declare_parameter("scene_board_size_z", inch(10))
+        # --- Four-corner board definition ---
+        # Pre-filled to match: center=(0.4139,0.0,0.2286), size_y=0.45, size_z=0.40, yaw=90°
+        #   half_width=0.225 m (along world Y), half_height=0.200 m (along world Z)
+        self.declare_parameter("scene_board_corner_bl_x",  0.4139)
+        self.declare_parameter("scene_board_corner_bl_y", -0.225)
+        self.declare_parameter("scene_board_corner_bl_z",  0.0286)
+        self.declare_parameter("scene_board_corner_br_x",  0.4139)
+        self.declare_parameter("scene_board_corner_br_y",  0.225)
+        self.declare_parameter("scene_board_corner_br_z",  0.0286)
+        self.declare_parameter("scene_board_corner_tr_x",  0.4139)
+        self.declare_parameter("scene_board_corner_tr_y",  0.225)
+        self.declare_parameter("scene_board_corner_tr_z",  0.4286)
+        self.declare_parameter("scene_board_corner_tl_x",  0.4139)
+        self.declare_parameter("scene_board_corner_tl_y", -0.225)
+        self.declare_parameter("scene_board_corner_tl_z",  0.4286)
+        # Simple calibration block for quick trial-and-error tuning.
+        # This is now the default/primary board calibration path:
+        #   - distance from robot (applied to all corner X values)
+        #   - vertical/horizontal tilt (degrees)
+        self.declare_parameter("scene_board_use_calibration_block", True)
+        self.declare_parameter("scene_board_distance_from_robot_m", 0.4139)
+        self.declare_parameter("scene_board_cal_tilt_vertical_deg", -5.0)
+        self.declare_parameter("scene_board_cal_tilt_horizontal_deg", 3.0)
+        # Tilt angles (degrees) — applied after corners are resolved
+        self.declare_parameter("scene_board_tilt_vertical_deg",   0.0)
+        self.declare_parameter("scene_board_tilt_horizontal_deg", 0.0)
+        # Board thickness (metres) — depth of the collision box along the normal axis
+        self.declare_parameter("scene_board_thickness", 0.01)
         self.declare_parameter("scene_table_enabled", False)
         self.declare_parameter("scene_table_id", "writing_table")
         self.declare_parameter("scene_table_center_x", 0.0)
@@ -195,6 +223,71 @@ class AceWriter(Node):
             float(self.get_parameter("scene_board_size_y").value),
             float(self.get_parameter("scene_board_size_z").value),
         )
+        self.scene_board_corners = {
+            "bl": (
+                float(self.get_parameter("scene_board_corner_bl_x").value),
+                float(self.get_parameter("scene_board_corner_bl_y").value),
+                float(self.get_parameter("scene_board_corner_bl_z").value),
+            ),
+            "br": (
+                float(self.get_parameter("scene_board_corner_br_x").value),
+                float(self.get_parameter("scene_board_corner_br_y").value),
+                float(self.get_parameter("scene_board_corner_br_z").value),
+            ),
+            "tr": (
+                float(self.get_parameter("scene_board_corner_tr_x").value),
+                float(self.get_parameter("scene_board_corner_tr_y").value),
+                float(self.get_parameter("scene_board_corner_tr_z").value),
+            ),
+            "tl": (
+                float(self.get_parameter("scene_board_corner_tl_x").value),
+                float(self.get_parameter("scene_board_corner_tl_y").value),
+                float(self.get_parameter("scene_board_corner_tl_z").value),
+            ),
+        }
+        self.scene_board_use_calibration_block = bool(
+            self.get_parameter("scene_board_use_calibration_block").value
+        )
+        self.scene_board_distance_from_robot_m = float(
+            self.get_parameter("scene_board_distance_from_robot_m").value
+        )
+        self.scene_board_cal_tilt_vertical_deg = float(
+            self.get_parameter("scene_board_cal_tilt_vertical_deg").value
+        )
+        self.scene_board_cal_tilt_horizontal_deg = float(
+            self.get_parameter("scene_board_cal_tilt_horizontal_deg").value
+        )
+        self.scene_board_tilt_vertical_deg   = float(self.get_parameter("scene_board_tilt_vertical_deg").value)
+        self.scene_board_tilt_horizontal_deg = float(self.get_parameter("scene_board_tilt_horizontal_deg").value)
+        self.scene_board_thickness           = float(self.get_parameter("scene_board_thickness").value)
+
+        # Apply calibration block unconditionally (default behavior).
+        # 1) Distance from robot: apply one X value to all four board corners.
+        # This keeps board width/height intact while moving the plane in/out.
+        x = self.scene_board_distance_from_robot_m
+        self.scene_board_corners = {
+            key: (x, value[1], value[2])
+            for key, value in self.scene_board_corners.items()
+        }
+        # 2) Tilt overrides from the quick calibration block.
+        self.scene_board_tilt_vertical_deg = self.scene_board_cal_tilt_vertical_deg
+        self.scene_board_tilt_horizontal_deg = self.scene_board_cal_tilt_horizontal_deg
+
+        self.get_logger().info(
+            "[board_calibration] using calibration block (default): "
+            f"distance={self.scene_board_distance_from_robot_m:.4f} m, "
+            f"tilt_v={self.scene_board_tilt_vertical_deg:.2f}°, "
+            f"tilt_h={self.scene_board_tilt_horizontal_deg:.2f}°"
+        )
+        # Compute the tilted board frame immediately so waypoint generation
+        # uses the same orientation that is applied to the collision box.
+        # Must be called after corners/tilts are stored; forward_draw is set
+        # later in __init__, so store a temporary sentinel and recompute then.
+        self._board_centre      = None  # set by _setup_board_frame()
+        self._board_face_centre = None
+        self._board_width_hat   = None
+        self._board_height_hat  = None
+        self._board_normal_hat  = None
         self.scene_table_enabled = bool(self.get_parameter("scene_table_enabled").value)
         self.scene_table_id = str(self.get_parameter("scene_table_id").value)
         self.scene_table_center = (
@@ -323,6 +416,8 @@ class AceWriter(Node):
         # - z: up/down (mapped to world z)
         self.forward_draw = inch(16.1)
         self.forward_ret = inch(14.5)
+        # Now that forward_draw is known, build the board frame used for waypoint projection.
+        self._setup_board_frame()
 
         self.height = inch(5.0)
         # Board bottom = 3.75 in above ground (matches scene_board_center_z - size_z/2)
@@ -377,9 +472,106 @@ class AceWriter(Node):
         )
 
     def _rotate_semantic_xy(self, x: float, y: float):
+        """Legacy 2-D yaw rotation — still used by relative-mode fallback path."""
         return (
             self._semantic_yaw_c * x - self._semantic_yaw_s * y,
             self._semantic_yaw_s * x + self._semantic_yaw_c * y,
+        )
+
+    def _setup_board_frame(self) -> None:
+        """Compute the tilted board's 3-D coordinate frame from the four corner
+        positions and the two tilt angles, then cache the results so that
+        _world_from_semantic can project any (forward, lateral, z) waypoint
+        onto the actual physical writing surface.
+
+        Board-local axes (before tilt):
+          width_hat  — from BL to BR (world Y on the default flat board)
+          height_hat — from BL to TL (world Z)
+          normal_hat — width × height (world +X, pointing away from the robot)
+
+        Tilt rotations (applied in order):
+          tilt_vertical_deg   — rotation about width_hat  (tips top toward/away from robot)
+          tilt_horizontal_deg — rotation about height_hat (rotates board left/right)
+
+        After tilting, we cache:
+          _board_centre      — mean of the four corners (physically unchanged; the
+                               collision box rotates around this point)
+          _board_face_centre — surface the pen tip actually touches:
+                               centre − half_thickness × normal_hat
+          _board_width_hat   — tilted board horizontal axis
+          _board_height_hat  — tilted board vertical axis
+          _board_normal_hat  — tilted outward normal (toward robot when negative)
+        """
+        import numpy as _np
+
+        bl = _np.array(self.scene_board_corners["bl"], dtype=float)
+        br = _np.array(self.scene_board_corners["br"], dtype=float)
+        tr = _np.array(self.scene_board_corners["tr"], dtype=float)
+        tl = _np.array(self.scene_board_corners["tl"], dtype=float)
+
+        centre = (bl + br + tr + tl) / 4.0
+
+        # Derive orthonormal board-local axes from the corners.
+        width_vec  = br - bl
+        width_m    = float(_np.linalg.norm(width_vec))
+        width_hat  = width_vec / width_m if width_m > 1e-9 else _np.array([0.0, 1.0, 0.0])
+
+        height_vec = tl - bl
+        height_m   = float(_np.linalg.norm(height_vec))
+        height_hat = height_vec / height_m if height_m > 1e-9 else _np.array([0.0, 0.0, 1.0])
+
+        normal_hat = _np.cross(width_hat, height_hat)
+        n_norm     = float(_np.linalg.norm(normal_hat))
+        normal_hat = normal_hat / n_norm if n_norm > 1e-9 else _np.array([1.0, 0.0, 0.0])
+        # Re-orthogonalise height so [normal, width, height] is a proper frame.
+        height_hat = _np.cross(normal_hat, width_hat)
+        h_norm     = float(_np.linalg.norm(height_hat))
+        if h_norm > 1e-9:
+            height_hat = height_hat / h_norm
+
+        def _rot_mat(axis: "_np.ndarray", deg: float) -> "_np.ndarray":
+            """Rodrigues rotation matrix: rotate *deg* degrees about *axis*."""
+            rad = math.radians(deg)
+            c, s = math.cos(rad), math.sin(rad)
+            ax, ay, az = axis / _np.linalg.norm(axis)
+            return _np.array([
+                [c + ax*ax*(1-c),       ax*ay*(1-c) - az*s,  ax*az*(1-c) + ay*s],
+                [ay*ax*(1-c) + az*s,    c + ay*ay*(1-c),      ay*az*(1-c) - ax*s],
+                [az*ax*(1-c) - ay*s,    az*ay*(1-c) + ax*s,   c + az*az*(1-c)   ],
+            ])
+
+        # Apply tilt_vertical_deg first (rotation about the board's width axis).
+        if abs(self.scene_board_tilt_vertical_deg) > 1e-6:
+            R = _rot_mat(width_hat, self.scene_board_tilt_vertical_deg)
+            width_hat  = R @ width_hat
+            height_hat = R @ height_hat
+            normal_hat = R @ normal_hat
+
+        # Then apply tilt_horizontal_deg (rotation about the board's height axis).
+        if abs(self.scene_board_tilt_horizontal_deg) > 1e-6:
+            R = _rot_mat(height_hat, self.scene_board_tilt_horizontal_deg)
+            width_hat  = R @ width_hat
+            height_hat = R @ height_hat
+            normal_hat = R @ normal_hat
+
+        # Store the tilted frame.
+        self._board_centre      = centre
+        self._board_width_hat   = width_hat
+        self._board_height_hat  = height_hat
+        self._board_normal_hat  = normal_hat
+
+        # Board face = front writing surface (toward the robot).
+        # The collision box is centred at *centre*; the pen tip touches the face:
+        #   face = centre − half_thickness × normal_hat
+        half_t = self.scene_board_thickness / 2.0
+        self._board_face_centre = centre - half_t * normal_hat
+
+        self.get_logger().info(
+            f"[board_frame] centre=({centre[0]:.4f},{centre[1]:.4f},{centre[2]:.4f})  "
+            f"face_centre=({self._board_face_centre[0]:.4f},{self._board_face_centre[1]:.4f},{self._board_face_centre[2]:.4f})  "
+            f"normal_hat=({normal_hat[0]:.4f},{normal_hat[1]:.4f},{normal_hat[2]:.4f})  "
+            f"tilt_v={self.scene_board_tilt_vertical_deg:.2f}°  "
+            f"tilt_h={self.scene_board_tilt_horizontal_deg:.2f}°"
         )
 
     def _world_from_semantic(
@@ -390,6 +582,21 @@ class AceWriter(Node):
         anchor_semantic=None,
         anchor_world=None,
     ):
+        """Map a semantic (forward, lateral, z) waypoint to world-frame XYZ.
+
+        Absolute mode (anchor_semantic is None)
+        ----------------------------------------
+        Projects the 2-D board coordinate (lateral, z) onto the tilted board
+        plane, then offsets by (forward − forward_draw) along the board normal
+        to handle pen retract / extend moves.
+
+        Relative mode (anchor_semantic / anchor_world provided)
+        ---------------------------------------------------------
+        Unchanged from the original implementation: offsets are computed in
+        the legacy semantic-yaw frame and added to the current EE pose. This
+        path is still used when relative_to_current_pose=true.
+        """
+        # ── Relative mode: unchanged ─────────────────────────────────────────
         if anchor_semantic is not None and anchor_world is not None:
             anchor_f, anchor_l, anchor_z = anchor_semantic
             ax, ay, az = anchor_world
@@ -401,13 +608,42 @@ class AceWriter(Node):
             y = ay + s * dy_rot + self.offset_y
             return x, y, az + s * (z - anchor_z) + self.offset_z
 
-        # Flip lateral so text is readable from the front.
-        x_sem = -lateral
-        y_sem = -forward
-        x_rot, y_rot = self._rotate_semantic_xy(x_sem, y_sem)
-        x = x_rot + self.offset_x
-        y = y_rot + self.offset_y
-        return x, y, z + self.offset_z
+        # ── Absolute mode: tilted-board projection ───────────────────────────
+        #
+        # Board-space coordinates (all in metres from the board centre):
+        #   u     = position along the board width axis
+        #           (-lateral because positive lateral = robot's right, which
+        #            is the negative width direction on the default board)
+        #   v     = position along the board height axis
+        #           (z is delivered as an absolute-world-Z value calibrated
+        #            for the flat board; subtracting _board_centre[2] recovers
+        #            the board-local height offset from centre)
+        #   depth = (forward − forward_draw): 0 when the pen is on the writing
+        #           surface, negative when retracted toward the robot
+        #
+        # The 3-D world position is then:
+        #   P = _board_face_centre
+        #       + u     × _board_width_hat
+        #       + v     × _board_height_hat
+        #       + depth × _board_normal_hat
+        #
+        # For a flat, untilted board this reduces exactly to the original
+        # semantic-yaw formula (verified by unit check during development).
+        u     = -lateral
+        v     = z - float(self._board_centre[2])
+        depth = forward - self.forward_draw
+
+        pos = (
+            self._board_face_centre
+            + u     * self._board_width_hat
+            + v     * self._board_height_hat
+            + depth * self._board_normal_hat
+        )
+        return (
+            float(pos[0]) + self.offset_x,
+            float(pos[1]) + self.offset_y,
+            float(pos[2]) + self.offset_z,
+        )
 
     def _apply_workspace_bounds(self, x: float, y: float, z: float):
         if self.workspace_enforce_x_bounds:
@@ -439,6 +675,118 @@ class AceWriter(Node):
             except TransformException:
                 time.sleep(0.05)
         return None
+
+    @staticmethod
+    def _build_box_from_corners(
+        object_id: str,
+        frame_id: str,
+        corners: dict,
+        thickness: float,
+        tilt_vertical_deg: float,
+        tilt_horizontal_deg: float,
+    ) -> CollisionObject:
+        """Build a CollisionObject box from four named corners (bl, br, tr, tl).
+
+        Steps:
+          1. Derive centre and orthonormal board-local axes from the corners.
+          2. Apply tilt_vertical_deg  (rotation about the board width  axis).
+          3. Apply tilt_horizontal_deg (rotation about the board height axis).
+          4. Convert to a Pose with a box whose dims are
+             [thickness, width_m, height_m].
+        """
+        import numpy as _np
+
+        bl = _np.array(corners["bl"], dtype=float)
+        br = _np.array(corners["br"], dtype=float)
+        tr = _np.array(corners["tr"], dtype=float)
+        tl = _np.array(corners["tl"], dtype=float)
+
+        centre = (bl + br + tr + tl) / 4.0
+
+        width_vec = br - bl
+        width_m   = float(_np.linalg.norm(width_vec))
+        width_hat = width_vec / width_m if width_m > 1e-9 else _np.array([0.0, 1.0, 0.0])
+
+        height_vec = tl - bl
+        height_m   = float(_np.linalg.norm(height_vec))
+        height_hat = height_vec / height_m if height_m > 1e-9 else _np.array([0.0, 0.0, 1.0])
+
+        # Normal = width × height, then re-orthogonalise height
+        normal_hat = _np.cross(width_hat, height_hat)
+        n_norm = float(_np.linalg.norm(normal_hat))
+        normal_hat = normal_hat / n_norm if n_norm > 1e-9 else _np.array([1.0, 0.0, 0.0])
+        height_hat = _np.cross(normal_hat, width_hat)
+        h_norm = float(_np.linalg.norm(height_hat))
+        if h_norm > 1e-9:
+            height_hat = height_hat / h_norm
+
+        # Rotation matrix: columns are [normal, width, height]
+        R = _np.column_stack([normal_hat, width_hat, height_hat])
+
+        def _rot(axis, deg):
+            rad = math.radians(deg)
+            c, s = math.cos(rad), math.sin(rad)
+            ax, ay, az = axis / _np.linalg.norm(axis)
+            return _np.array([
+                [c + ax*ax*(1-c),     ax*ay*(1-c) - az*s, ax*az*(1-c) + ay*s],
+                [ay*ax*(1-c) + az*s,  c + ay*ay*(1-c),     ay*az*(1-c) - ax*s],
+                [az*ax*(1-c) - ay*s,  az*ay*(1-c) + ax*s,  c + az*az*(1-c)  ],
+            ])
+
+        if abs(tilt_vertical_deg) > 1e-6:
+            R = _rot(width_hat, tilt_vertical_deg) @ R
+        if abs(tilt_horizontal_deg) > 1e-6:
+            R = _rot(height_hat, tilt_horizontal_deg) @ R
+
+        # Rotation matrix → quaternion (Shepperd's method)
+        trace = R[0, 0] + R[1, 1] + R[2, 2]
+        if trace > 0:
+            s2 = math.sqrt(trace + 1.0) * 2
+            qw = 0.25 * s2
+            qx = (R[2, 1] - R[1, 2]) / s2
+            qy = (R[0, 2] - R[2, 0]) / s2
+            qz = (R[1, 0] - R[0, 1]) / s2
+        elif R[0, 0] > R[1, 1] and R[0, 0] > R[2, 2]:
+            s2 = math.sqrt(1.0 + R[0, 0] - R[1, 1] - R[2, 2]) * 2
+            qw = (R[2, 1] - R[1, 2]) / s2
+            qx = 0.25 * s2
+            qy = (R[0, 1] + R[1, 0]) / s2
+            qz = (R[0, 2] + R[2, 0]) / s2
+        elif R[1, 1] > R[2, 2]:
+            s2 = math.sqrt(1.0 + R[1, 1] - R[0, 0] - R[2, 2]) * 2
+            qw = (R[0, 2] - R[2, 0]) / s2
+            qx = (R[0, 1] + R[1, 0]) / s2
+            qy = 0.25 * s2
+            qz = (R[1, 2] + R[2, 1]) / s2
+        else:
+            s2 = math.sqrt(1.0 + R[2, 2] - R[0, 0] - R[1, 1]) * 2
+            qw = (R[1, 0] - R[0, 1]) / s2
+            qx = (R[0, 2] + R[2, 0]) / s2
+            qy = (R[1, 2] + R[2, 1]) / s2
+            qz = 0.25 * s2
+
+        box = CollisionObject()
+        box.header.frame_id = frame_id
+        box.id = object_id
+        box.operation = CollisionObject.ADD
+
+        primitive = SolidPrimitive()
+        primitive.type = SolidPrimitive.BOX
+        # X = thickness (normal axis), Y = width, Z = height
+        primitive.dimensions = [float(thickness), float(width_m), float(height_m)]
+
+        pose = Pose()
+        pose.position.x = float(centre[0])
+        pose.position.y = float(centre[1])
+        pose.position.z = float(centre[2])
+        pose.orientation.x = qx
+        pose.orientation.y = qy
+        pose.orientation.z = qz
+        pose.orientation.w = qw
+
+        box.primitives.append(primitive)
+        box.primitive_poses.append(pose)
+        return box
 
     @staticmethod
     def _build_box(
@@ -476,12 +824,21 @@ class AceWriter(Node):
         objects = []
         if self.scene_board_enabled:
             objects.append(
-                self._build_box(
+                self._build_box_from_corners(
                     object_id=self.scene_board_id,
                     frame_id=frame_id,
-                    center_xyz=self.scene_board_center,
-                    size_xyz=self.scene_board_size,
+                    corners=self.scene_board_corners,
+                    thickness=self.scene_board_thickness,
+                    tilt_vertical_deg=self.scene_board_tilt_vertical_deg,
+                    tilt_horizontal_deg=self.scene_board_tilt_horizontal_deg,
                 )
+            )
+            self.get_logger().info(
+                f"Board collision object '{self.scene_board_id}' built from corners "
+                f"BL={self.scene_board_corners['bl']} BR={self.scene_board_corners['br']} "
+                f"TR={self.scene_board_corners['tr']} TL={self.scene_board_corners['tl']} "
+                f"tilt_v={self.scene_board_tilt_vertical_deg:.1f}° "
+                f"tilt_h={self.scene_board_tilt_horizontal_deg:.1f}°"
             )
         if self.scene_table_enabled:
             objects.append(
@@ -657,21 +1014,32 @@ class AceWriter(Node):
             return
 
         # --- SMART SAMPLING CONFIGURATION ---
-        # 0.05 radians is approx 3 degrees.
-        # Smaller number = More steps (Smoother, but slower)
-        # Larger number = Fewer steps (Blockier, but faster)
-        MIN_CHANGE_RAD = 0.01
+        # Target: one keyframe per ~80 ms of servo travel (KEYFRAME_INTERVAL_MS floor).
+        # AX-12A @ speed=10  ->  0.0093 rad / 80 ms
+        # MX-64  @ speed=20  ->  0.0191 rad / 80 ms
+        # Setting threshold to half the AX-12A 80 ms travel gives ~2-3x more
+        # keyframes and keeps each step well within what the slowest servo can
+        # cover in one KEYFRAME_INTERVAL_MS window.
+        # Smaller number = More steps (Smoother, but slower to generate)
+        # Larger number = Fewer steps (Blockier/jumpy)
+        MIN_CHANGE_RAD = 0.004
         # ------------------------------------
 
         last_saved_vals = None
+        last_saved_time_ns = 0
 
         for i, pt in enumerate(traj.points):
             vals = [float(pt.positions[j]) for j in index]
+            t_ns = pt.time_from_start.sec * 1_000_000_000 + pt.time_from_start.nanosec
 
-            # Always save the very first point
+            # Always save the very first point of this segment
             if last_saved_vals is None:
-                self._captured_samples.append((0, vals, False))
+                # First segment: no delay on first point; subsequent segments:
+                # small gap so the Arduino doesn't merge with the previous segment.
+                dt_ms = 0 if not self._captured_samples else 60
+                self._captured_samples.append((dt_ms, vals, False))
                 last_saved_vals = vals
+                last_saved_time_ns = t_ns
                 continue
 
             # Check: Did any joint move enough to justify a new command?
@@ -679,8 +1047,16 @@ class AceWriter(Node):
 
             # Save IF: Moved enough OR it is the final destination (Corner)
             if max_diff > MIN_CHANGE_RAD or i == len(traj.points) - 1:
-                self._captured_samples.append((0, vals, False))
+                # Accumulate elapsed time from the last *saved* point (includes
+                # any skipped intermediate waypoints).
+                dt_ns = t_ns - last_saved_time_ns
+                if dt_ns > 0:
+                    dt_ms = int(max(20, min(2000, round(dt_ns / 1_000_000))))
+                else:
+                    dt_ms = 20
+                self._captured_samples.append((dt_ms, vals, False))
                 last_saved_vals = vals
+                last_saved_time_ns = t_ns
 
     def old_append_planned_samples(self, traj) -> None:
         names = list(traj.joint_names)
@@ -737,7 +1113,8 @@ class AceWriter(Node):
             f.write("  float j4_rad;\n")
             f.write("  float j5_rad;\n")
             f.write("  float j6_rad;\n")
-            f.write("  uint8_t pause;  // 0=stream; 1=pen-lift/plant boundary (full stop + dwell); 2=draw-to-draw corner (stop, no dwell)\n")
+            f.write("  uint8_t pause;  // 0=stream; 1=pen-lift/plant boundary (full stop); "
+                    "2=draw-to-draw corner (stop, no dwell); 3=user pause point (full stop + PAUSE_POINT_MS dwell)\n")
             f.write("} JointSample;\n\n")
             f.write("static const JointSample kTrajectory[] = {\n")
             for dt_ms, vals, pause in self._captured_samples:
@@ -801,7 +1178,7 @@ class AceWriter(Node):
             if last_err is not None:
                 self.get_logger().error(
                     f"{mode}: all retries failed for target x={tx:.4f} y={ty:.4f} z={tz:.4f}; "
-                    "keeping previous pose and continuing."
+                    f"last_error={last_err}; keeping previous pose and continuing."
                 )
                 return prev_xyz, False
             self.get_logger().error(
@@ -842,7 +1219,14 @@ class AceWriter(Node):
 
     def _resolve_world_targets(self, plan, anchor_semantic=None, anchor_world=None):
         resolved = []
-        for mode, (forward, lateral, z) in plan:
+        for entry in plan:
+            # Support both 2-tuple (mode, xyz) from _build_semantic_plan and
+            # 3-tuple (mode, xyz, user_pause) from _build_plan_from_file.
+            if len(entry) == 3:
+                mode, (forward, lateral, z), user_pause = entry
+            else:
+                mode, (forward, lateral, z) = entry
+                user_pause = False
             x, y, z2 = self._world_from_semantic(
                 forward,
                 lateral,
@@ -851,7 +1235,7 @@ class AceWriter(Node):
                 anchor_world=anchor_world,
             )
             x, y, z2, clipped = self._apply_workspace_bounds(x, y, z2)
-            resolved.append((mode, forward, lateral, x, y, z2, clipped))
+            resolved.append((mode, forward, lateral, x, y, z2, clipped, user_pause))
         return resolved
 
     def _load_plan(self):
@@ -897,6 +1281,10 @@ class AceWriter(Node):
         Each segment may have:
           "lift_after": true  → lift pen after stroke and travel to next start (default)
           "lift_after": false → pen stays on board; draw directly to next stroke start
+          "pause_point_start": true → insert pause=3 when pen arrives at stroke start
+          "pause_point_end":   true → insert pause=3 when pen arrives at stroke end
+
+        Plan entries are 3-tuples: (mode, xyz_tuple, user_pause_bool)
         """
         with open(file_path) as f:
             data = json.load(f)
@@ -913,26 +1301,28 @@ class AceWriter(Node):
             lat_end_m   = seg["end"][0]   * 0.0254
             z_end       = self.z_bot + inch(seg["end"][1])
             lift_after  = seg.get("lift_after", True)   # default: lift
+            pause_start = bool(seg.get("pause_point_start", False))
+            pause_end   = bool(seg.get("pause_point_end",   False))
 
             if not pen_is_down:
                 # Pen is in the air – go directly (diagonally) to start position while retracted
-                plan.append(("travel", (self.forward_ret,  lat_start_m, z_start)))
+                plan.append(("travel", (self.forward_ret,  lat_start_m, z_start), False))
                 # Extend forward to touch the board at the exact start point
-                plan.append(("draw",   (self.forward_draw, lat_start_m, z_start)))
+                plan.append(("draw",   (self.forward_draw, lat_start_m, z_start), pause_start))
             else:
                 # Pen is already on the board – draw across to new stroke start
-                plan.append(("draw", (self.forward_draw, lat_start_m, z_start)))
+                plan.append(("draw", (self.forward_draw, lat_start_m, z_start), pause_start))
 
             # Draw the stroke itself
-            plan.append(("draw", (self.forward_draw, lat_end_m, z_end)))
+            plan.append(("draw", (self.forward_draw, lat_end_m, z_end), pause_end))
 
             if lift_after:
                 # Retract from board cleanly at stroke end height (no board dragging)
-                plan.append(("travel", (self.forward_ret,  lat_end_m, z_end)))
+                plan.append(("travel", (self.forward_ret,  lat_end_m, z_end), False))
                 pen_is_down = False
                 # If this is the last segment, park high
                 if i == len(segments) - 1:
-                    plan.append(("travel", (self.forward_ret, lat_end_m, self.z_top)))
+                    plan.append(("travel", (self.forward_ret, lat_end_m, self.z_top), False))
             else:
                 # Pen stays on the board for the next segment
                 pen_is_down = True
@@ -942,8 +1332,8 @@ class AceWriter(Node):
             last = segments[-1]
             lat_end_m = last["end"][0] * 0.0254
             z_last_end = self.z_bot + inch(last["end"][1])
-            plan.append(("travel", (self.forward_ret,  lat_end_m, z_last_end)))
-            plan.append(("travel", (self.forward_ret,  lat_end_m, self.z_top)))
+            plan.append(("travel", (self.forward_ret,  lat_end_m, z_last_end), False))
+            plan.append(("travel", (self.forward_ret,  lat_end_m, self.z_top),  False))
 
         return plan
 
@@ -1002,7 +1392,7 @@ class AceWriter(Node):
         failed_segments = 0
         bounded_segments = 0
         prev_mode = "travel"  # treat start-of-plan as if coming from a travel so the first draw triggers a touch-down pause
-        for mode, forward, lateral, x, y, z, clipped in world_targets:
+        for mode, forward, lateral, x, y, z, clipped, user_pause in world_targets:
             if clipped:
                 bounded_segments += 1
             if prev_xyz is not None:
@@ -1021,18 +1411,45 @@ class AceWriter(Node):
             # (e.g. the apex of an 'A'). The arm must fully stop there before
             # changing direction; without a wait it blends/cuts the corner.
             # pause=2 → waitForMotionComplete, no retract dwell.
+            # Do NOT overwrite a user-defined pause=3.
             if mode == "draw" and prev_mode == "draw" and self._captured_samples:
                 dt_ms, vals, _p = self._captured_samples[-1]
-                self._captured_samples[-1] = (dt_ms, vals, 2)
+                if _p != 3:
+                    self._captured_samples[-1] = (dt_ms, vals, 2)
 
             # Pause before retract: we are about to execute a travel that follows
             # a draw. The arm is still at the pen-down position (end of stroke).
             # Mark the last already-captured sample — the final keyframe of that
             # draw — so the Arduino pauses after the arm settles there.
-            # pause=1 → waitForMotionComplete + RETRACT_PAUSE_MS dwell.
+            # pause=1 → waitForMotionComplete + CONTACT_PAUSE_MS dwell.
+            # Do NOT overwrite a user-defined pause=3.
             if mode == "travel" and prev_mode == "draw" and self._captured_samples:
                 dt_ms, vals, _p = self._captured_samples[-1]
-                self._captured_samples[-1] = (dt_ms, vals, 1)
+                if _p != 3:
+                    self._captured_samples[-1] = (dt_ms, vals, 1)
+
+            # Pause between retract-in-place and lateral travel: the previous
+            # travel pulled the pen back from the board surface. The next travel
+            # will sweep laterally. Slow servos (TRAJECTORY_SPEED=10) cannot
+            # complete a retract in the time allotted by MoveIt's dt_ms alone.
+            # Forcing a full stop here guarantees the arm is truly retracted
+            # before lateral movement begins — preventing pen drag.
+            # pause=1 → waitForMotionComplete + CONTACT_PAUSE_MS dwell.
+            if mode == "travel" and prev_mode == "travel" and self._captured_samples:
+                dt_ms, vals, _p = self._captured_samples[-1]
+                if _p != 3:
+                    self._captured_samples[-1] = (dt_ms, vals, 1)
+
+            # Pause at hover before plunge: we are about to execute a draw that
+            # follows a travel. The arm should be stationary at the hover position
+            # (forward_ret, above segment start) before it extends to the board.
+            # Marking the last travel waypoint forces a full stop here, preventing
+            # the plunge from starting while the arm is still moving laterally.
+            # pause=1 → waitForMotionComplete + CONTACT_PAUSE_MS dwell.
+            if mode == "draw" and prev_mode == "travel" and self._captured_samples:
+                dt_ms, vals, _p = self._captured_samples[-1]
+                if _p != 3:
+                    self._captured_samples[-1] = (dt_ms, vals, 1)
 
             samples_before = len(self._captured_samples)
 
@@ -1046,7 +1463,7 @@ class AceWriter(Node):
             # travel (pen extended forward to the board surface). Mark the last
             # keyframe of this draw segment so the Arduino pauses once the arm
             # has fully arrived at the board.
-            # pause=1 → waitForMotionComplete + RETRACT_PAUSE_MS dwell.
+            # pause=1 → waitForMotionComplete + CONTACT_PAUSE_MS dwell.
             if mode == "draw" and prev_mode_before == "travel":
                 if len(self._captured_samples) > samples_before:
                     dt_ms, vals, _p = self._captured_samples[-1]
@@ -1056,6 +1473,15 @@ class AceWriter(Node):
                 executed_segments += 1
             else:
                 failed_segments += 1
+
+            # User-defined pause point: overrides all auto-detected flags.
+            # pause=3 tells the Arduino to stop and dwell for PAUSE_POINT_MS.
+            if user_pause and self._captured_samples:
+                dt_ms, vals, _p = self._captured_samples[-1]
+                self._captured_samples[-1] = (dt_ms, vals, 3)
+                self.get_logger().info(
+                    f"user pause=3 tagged at waypoint {len(self._captured_samples) - 1}"
+                )
 
         self.get_logger().info(
             "WRITE_SUMMARY "
@@ -1095,7 +1521,7 @@ class AceWriter(Node):
 
         prev_pt = None
         prev_forward = None
-        for mode, forward, lateral, x, y, z, _ in world_targets:
+        for mode, forward, lateral, x, y, z, _, _up in world_targets:
             curr_pt = Point(x=x, y=y, z=z)
             if prev_pt is not None:
                 forward_changed = (prev_forward is not None and

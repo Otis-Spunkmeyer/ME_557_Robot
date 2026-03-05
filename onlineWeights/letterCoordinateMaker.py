@@ -66,6 +66,7 @@ COL_PT_START  = "#00ff88"   # chain start dot
 COL_PT_MID    = "#ff9900"   # mid-chain junction dot (continue colour)
 COL_PT_END    = "#00ccff"   # chain end dot (lift colour)
 COL_PT_PEND   = "#ffff00"   # pending first-point dot (awaiting second click)
+COL_PT_PAUSE  = "#ff44ff"   # user-defined pause node marker
 COL_HOVER     = "#ffffff"
 
 OUTPUT_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
@@ -111,6 +112,13 @@ class LetterCoordinateMaker:
         self.segments   = []
         self.chain_tail = None   # None = no active chain
 
+        # ── Pause-point state ────────────────────────────────────────────────
+        # Set of (lat, z) tuples (rounded, in inches) for nodes designated as
+        # user pause points.  When active, the PAUSE POINT mode lets the user
+        # click on any existing segment node to toggle it in/out of this set.
+        self.pause_nodes  = set()
+        self._pause_mode  = False   # True while PAUSE POINT tool is active
+
         self.hover_lat = 0.0
         self.hover_z   = 0.0
         self.snap_on   = True
@@ -134,6 +142,7 @@ class LetterCoordinateMaker:
             if not segs:
                 return
             self.segments = segs
+            self._restore_pause_nodes(segs)
             # Restore chain_tail: if the last segment was not ended with a
             # lift it means the chain was still open — re-open it so the
             # user can continue adding to it.  Otherwise, no active chain.
@@ -181,6 +190,7 @@ class LetterCoordinateMaker:
         items = [
             ("---", COL_SEG_CONT, "Continue (pen down)"),
             ("---", COL_SEG_LIFT, "Travel   (pen lifts)"),
+            ("<>" , COL_PT_PAUSE, "Pause point node"),
         ]
         for row, (sym, col, txt) in enumerate(items):
             tk.Label(legend, text=sym, bg=COL_BG, fg=col,
@@ -221,6 +231,16 @@ class LetterCoordinateMaker:
             command=self._cmd_end_chain,
         )
         self._btn_end.pack(pady=4)
+
+        self._btn_pause = tk.Button(
+            panel, text="[P] PAUSE POINT",
+            bg="#220033", fg="#ff44ff",
+            activebackground="#440055", activeforeground="#ff88ff",
+            font=("Courier", 10, "bold"), relief=tk.FLAT,
+            width=20, height=2,
+            command=self._cmd_toggle_pause_mode,
+        )
+        self._btn_pause.pack(pady=4)
 
         tk.Button(
             panel, text="[<] Undo Last",
@@ -399,6 +419,29 @@ class LetterCoordinateMaker:
                               fill=COL_SEG_CONT, width=1, dash=(5, 3),
                               tags="dynamic")
 
+        # Draw user pause-point diamond markers (drawn on top of node dots)
+        for (lat, z) in self.pause_nodes:
+            px_c = lat_to_cx(lat)
+            py_c = z_to_cy(z)
+            r = 9
+            c.create_polygon(
+                px_c,     py_c - r,   # top
+                px_c + r, py_c,       # right
+                px_c,     py_c + r,   # bottom
+                px_c - r, py_c,       # left
+                fill=COL_PT_PAUSE, outline=COL_HOVER, width=1,
+                tags="dynamic",
+            )
+
+        # In pause mode, highlight hover if near a node
+        if self._pause_mode:
+            node = self._find_nearest_node(self.canvas.winfo_pointerx() - self.canvas.winfo_rootx(),
+                                           self.canvas.winfo_pointery() - self.canvas.winfo_rooty())
+            if node:
+                hx2, hy2 = lat_to_cx(node[0]), z_to_cy(node[1])
+                c.create_oval(hx2 - 12, hy2 - 12, hx2 + 12, hy2 + 12,
+                              outline=COL_PT_PAUSE, width=2, tags="dynamic")
+
         # Hover crosshair
         hx, hy = lat_to_cx(self.hover_lat), z_to_cy(self.hover_z)
         if self._in_board_px(hx, hy):
@@ -436,7 +479,44 @@ class LetterCoordinateMaker:
     def _on_leave(self, event):
         self._refresh()
 
+    def _find_nearest_node(self, event_x, event_y, threshold_px=18):
+        """Return (lat, z) of the nearest segment node within threshold_px, or None."""
+        best_dist = threshold_px
+        best_pt   = None
+        for seg in self.segments:
+            for coord in (seg["start"], seg["end"]):
+                cx = lat_to_cx(coord[0])
+                cy = z_to_cy(coord[1])
+                dist = ((event_x - cx) ** 2 + (event_y - cy) ** 2) ** 0.5
+                if dist < best_dist:
+                    best_dist = dist
+                    best_pt   = (coord[0], coord[1])
+        return best_pt
+
     def _on_click(self, event):
+        # ── PAUSE POINT mode: toggle nodes in/out of pause_nodes ─────────────
+        if self._pause_mode:
+            node = self._find_nearest_node(event.x, event.y)
+            if node:
+                key = (node[0], node[1])
+                if key in self.pause_nodes:
+                    self.pause_nodes.discard(key)
+                    self.status_var.set(
+                        f"Pause REMOVED\nfrom ({node[0]:+.2f}\", {node[1]:.2f}\")"
+                    )
+                else:
+                    self.pause_nodes.add(key)
+                    self.status_var.set(
+                        f"PAUSE added\nat ({node[0]:+.2f}\", {node[1]:.2f}\")"
+                    )
+                self._update_seg_list()
+                self._refresh()
+            else:
+                self.status_var.set(
+                    "No node nearby.\nClick a segment\nstart/end point."
+                )
+            return
+
         pt = self._resolve(event)
         if not pt:
             return
@@ -530,12 +610,36 @@ class LetterCoordinateMaker:
         self._update_seg_list()
         self._refresh()
 
+    def _cmd_toggle_pause_mode(self):
+        self._pause_mode = not self._pause_mode
+        if self._pause_mode:
+            self._btn_pause.configure(
+                bg="#550055", fg="#ff88ff", relief=tk.SUNKEN,
+            )
+            self.status_var.set(
+                "PAUSE POINT MODE\n\nClick any segment\nnode to toggle.\n\n"
+                "Click [P] again\nto exit."
+            )
+        else:
+            self._btn_pause.configure(
+                bg="#220033", fg="#ff44ff", relief=tk.FLAT,
+            )
+            n = len(self.pause_nodes)
+            self.status_var.set(
+                f"Pause mode OFF.\n{n} pause node(s) set.\n\n"
+                "Click canvas to\ndraw segments."
+            )
+        self._refresh()
+
     def _cmd_clear(self):
         if (self.segments or self.chain_tail) and not messagebox.askyesno(
                 "Clear all", "Remove all segments?"):
             return
         self.segments.clear()
         self.chain_tail = None
+        self.pause_nodes.clear()
+        self._pause_mode = False
+        self._btn_pause.configure(bg="#220033", fg="#ff44ff", relief=tk.FLAT)
         self.status_var.set("All cleared.\nClick to start.")
         self._update_seg_list()
         self._refresh()
@@ -544,12 +648,14 @@ class LetterCoordinateMaker:
         if not self.segments:
             messagebox.showwarning("No segments", "Draw at least one segment first.")
             return
-        data = {"segments": self.segments}
+        data = {"segments": self._build_export_segments()}
         with open(OUTPUT_FILE, "w") as f:
             json.dump(data, f, indent=2)
+        n_pause = len(self.pause_nodes)
         messagebox.showinfo(
             "Saved!",
             f"Saved {len(self.segments)} segment(s) to:\n{OUTPUT_FILE}\n\n"
+            f"Pause nodes: {n_pause}\n\n"
             "Trigger the robot to replay."
         )
         self.status_var.set(f"Saved {len(self.segments)} segment(s)!")
@@ -574,15 +680,17 @@ class LetterCoordinateMaker:
             return
         os.makedirs(SAVED_DIR, exist_ok=True)
         dest = os.path.join(SAVED_DIR, f"{safe}.json")
-        data = {"name": safe, "segments": self.segments}
+        data = {"name": safe, "segments": self._build_export_segments()}
         with open(dest, "w") as f:
             json.dump(data, f, indent=2)
         # Also push to letterCoordinates.json so trigger_write picks it up
         with open(OUTPUT_FILE, "w") as f:
             json.dump(data, f, indent=2)
+        n_pause = len(self.pause_nodes)
         messagebox.showinfo(
             "Saved!",
-            f"Saved as '{safe}'\n→ {dest}\n\nAlso copied to letterCoordinates.json."
+            f"Saved as '{safe}'\n→ {dest}\n\nPause nodes: {n_pause}\n\n"
+            "Also copied to letterCoordinates.json."
         )
         self.status_var.set(f"Saved as '{safe}'.")
 
@@ -629,11 +737,15 @@ class LetterCoordinateMaker:
                     return
                 self.segments = segs
                 self.chain_tail = None
+                self.pause_nodes.clear()
+                self._restore_pause_nodes(segs)
                 # Copy to letterCoordinates.json so trigger_write uses it
                 with open(OUTPUT_FILE, "w") as fh:
                     json.dump(data, fh, indent=2)
+                n_pause = len(self.pause_nodes)
                 self.status_var.set(
-                    f"Loaded '{chosen[:-5]}'\n({len(segs)} segments).\n\n"
+                    f"Loaded '{chosen[:-5]}'\n({len(segs)} segments).\n"
+                    f"{n_pause} pause node(s).\n\n"
                     "letterCoordinates.json\nupdated."
                 )
                 self._update_seg_list()
@@ -654,6 +766,29 @@ class LetterCoordinateMaker:
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 
+    def _build_export_segments(self):
+        """Return a copy of self.segments with pause_point_start/end fields
+        injected based on self.pause_nodes.  The original list is unchanged."""
+        out = []
+        for seg in self.segments:
+            s_key = (seg["start"][0], seg["start"][1])
+            e_key = (seg["end"][0],   seg["end"][1])
+            d = dict(seg)
+            d["pause_point_start"] = s_key in self.pause_nodes
+            d["pause_point_end"]   = e_key in self.pause_nodes
+            out.append(d)
+        return out
+
+    def _restore_pause_nodes(self, segments):
+        """Reconstruct self.pause_nodes from pause_point_start/end fields in
+        loaded segment data.  Silently handles old files that lack the fields."""
+        self.pause_nodes.clear()
+        for seg in segments:
+            if seg.get("pause_point_start"):
+                self.pause_nodes.add((seg["start"][0], seg["start"][1]))
+            if seg.get("pause_point_end"):
+                self.pause_nodes.add((seg["end"][0], seg["end"][1]))
+
     def _update_seg_list(self):
         if not self.segments:
             self.seg_list_var.set("(none)")
@@ -662,9 +797,11 @@ class LetterCoordinateMaker:
         for i, seg in enumerate(self.segments):
             s, e = seg["start"], seg["end"]
             icon = "[UP]" if seg["lift_after"] else "[->"
+            ps = "[P]" if (s[0], s[1]) in self.pause_nodes else "   "
+            pe = "[P]" if (e[0], e[1]) in self.pause_nodes else "   "
             lines.append(
-                f"{i+1}{icon} ({s[0]:+.1f}\",{s[1]:.1f}\") ->\n"
-                f"     ({e[0]:+.1f}\",{e[1]:.1f}\")"
+                f"{i+1}{icon} {ps}({s[0]:+.1f}\",{s[1]:.1f}\")->\n"
+                f"     {pe}({e[0]:+.1f}\",{e[1]:.1f}\")"
             )
         self.seg_list_var.set("\n".join(lines))
 

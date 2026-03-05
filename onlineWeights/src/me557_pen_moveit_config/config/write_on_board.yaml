@@ -4,7 +4,7 @@ board_writer:
     # the same world-collision assumptions.
     scene_setup_enabled: true
     scene_setup_timeout_sec: 20.0
-    scene_board_enabled: false
+    scene_board_enabled: true
     scene_board_id: "writing_board"
     scene_board_center_x: 0.4139  # 16.1" from base + 0.5cm half-thickness
     scene_board_center_y: 0.0
@@ -12,6 +12,52 @@ board_writer:
     scene_board_size_x: 0.01
     scene_board_size_y: 0.45
     scene_board_size_z: 0.40
+
+    # ── BOARD CALIBRATION DEFAULTS (edit these 3 values) ───────────────────
+    # This is the primary/default tuning path for real hardware.
+    # 1) scene_board_distance_from_robot_m:
+    #      moves the whole board in/out from the robot (all 4 corners X).
+    #      Increase = board farther, decrease = board closer.
+    # 2) scene_board_cal_tilt_vertical_deg:
+    #      + top edge tips toward robot, - top edge tips away.
+    # 3) scene_board_cal_tilt_horizontal_deg:
+    #      + right edge tips toward robot, - left edge tips toward robot.
+    scene_board_use_calibration_block: true
+    scene_board_distance_from_robot_m: 0.425
+    scene_board_cal_tilt_vertical_deg: 0.0
+    scene_board_cal_tilt_horizontal_deg: 3.0
+
+    # --- Four-corner board definition ---
+    # Corners are defined in world (base_link) frame.
+    # Order: bottom-left, bottom-right, top-right, top-left
+    # (left/right from the robot's perspective looking at the board)
+    # Pre-filled to exactly match the current center/size config above:
+    #   center=(0.4139, 0.0, 0.2286), size_y=0.45 (half=0.225), size_z=0.40 (half=0.200)
+    #   Board face normal is along +X; corners lie at X = center_x = 0.4139
+    scene_board_corner_bl_x: 0.4139    # bottom-left  X
+    scene_board_corner_bl_y: -0.225    # bottom-left  Y  (center_y - half_width)
+    scene_board_corner_bl_z:  0.0286   # bottom-left  Z  (center_z - half_height = 0.2286 - 0.200)
+
+    scene_board_corner_br_x: 0.4139    # bottom-right X
+    scene_board_corner_br_y:  0.225    # bottom-right Y  (center_y + half_width)
+    scene_board_corner_br_z:  0.0286   # bottom-right Z
+
+    scene_board_corner_tr_x: 0.4139    # top-right X
+    scene_board_corner_tr_y:  0.225    # top-right Y
+    scene_board_corner_tr_z:  0.4286   # top-right Z  (center_z + half_height = 0.2286 + 0.200)
+
+    scene_board_corner_tl_x: 0.4139    # top-left X
+    scene_board_corner_tl_y: -0.225    # top-left Y
+    scene_board_corner_tl_z:  0.4286   # top-left Z
+
+    # Legacy tilt fields kept for compatibility/older configs.
+    # Runtime uses scene_board_cal_tilt_* as the default calibration source.
+    scene_board_tilt_vertical_deg:    0.0
+    scene_board_tilt_horizontal_deg:  0.0
+
+    # Board thickness (metres) — used as the collision box depth along the normal axis
+    scene_board_thickness: 0.01
+
     scene_table_enabled: false
     scene_table_id: "writing_table"
     scene_table_center_x: 0.0
@@ -25,9 +71,16 @@ board_writer:
     relative_to_current_pose: false
     relative_scale: 1.0
     cartesian: true
+    # Balanced planning profile:
+    # - Prefer Cartesian lines
+    # - Allow non-Cartesian fallback only when Cartesian fails
+    # - Keep a joint-span guard to reject extreme branch flips
+    fallback_to_noncartesian: true
+    cartesian_max_step: 0.0025
+    cartesian_fraction_threshold: 0.97
     weight_orientation: 1.0
     tolerance_orientation: 0.25
-    max_joint_span_rad: 1.2
+    max_joint_span_rad: 0.8
 
     # --- Sim-to-real fidelity knobs ---
     # These scale the joint_limits.yaml max values before MoveIt parameterizes

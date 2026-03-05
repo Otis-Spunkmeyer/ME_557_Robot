@@ -1,7 +1,6 @@
 #include <Dynamixel2Arduino.h>
-// #include <Servo.h>  // DISABLED — Servo.h timer conflicts with Dynamixel UART
+#include <Servo.h>
 #include "trajectory_data.h"
-#include "moveItData.h"
 
 #define DXL_SERIAL Serial1
 #define PC_SERIAL  Serial
@@ -15,105 +14,139 @@ struct RobotMotor;
 Dynamixel2Arduino d2a(DXL_SERIAL);
 
 // PWM hobby servo on pin 3 — controlled as ID 7
-// #define PEN_SERVO_PIN      3
-// #define PEN_SERVO_HOME_DEG 70
-// #define PEN_SERVO_GRAB_DEG 90
-// Servo penServo;
-// int g_penServoDeg = PEN_SERVO_HOME_DEG;  // tracks current pen servo position
-
-// Move the pen servo from its current position to targetDeg over durationMs.
-// DISABLED — Servo.h timer conflicts with Dynamixel UART
-// void penServoSweep(int targetDeg, unsigned long durationMs) {
-//   penServo.attach(PEN_SERVO_PIN);
-//   int startDeg = g_penServoDeg;
-//   int delta = targetDeg - startDeg;
-//   if (delta != 0) {
-//     int steps = abs(delta);
-//     unsigned long stepMs = durationMs / steps;
-//     if (stepMs < 1) stepMs = 1;
-//     int dir = (delta > 0) ? 1 : -1;
-//     for (int i = 1; i <= steps; i++) {
-//       penServo.write(startDeg + dir * i);
-//       delay(stepMs);
-//     }
-//     g_penServoDeg = targetDeg;
-//   }
-//   penServo.detach();
-// }
+#define PEN_SERVO_PIN      3
+#define PEN_SERVO_HOME_DEG 70   // Open position
+#define PEN_SERVO_GRAB_DEG 90   // Closed / writing position
+Servo penServo;
+int g_penServoDeg = PEN_SERVO_HOME_DEG;  // tracks current pen servo position
 
 // =============================================================================
-// CONFIGURATION — edit these values to tune robot behaviour
+// CONFIGURATION — all tunable values in one place
 // =============================================================================
-const int   HOME_SPEED         = 15;    // Speed when homing (seq 100 / startup)
-const int   MANUAL_SPEED       = 15;    // Speed in manual ID control mode
-const int   TRAJECTORY_SPEED   = 10;     // Speed during trajectory streaming — slow so moves take LONGER than the interval
 
-// Trajectory playback
-// During a drawing segment keyframes are STREAMED at this interval.  The servo
-// receives the next goal position while still moving toward the previous one;
-// its internal velocity profile blends smoothly through each waypoint.
-// Tune so the interval roughly matches how long each inter-keyframe move takes
-// at TRAJECTORY_SPEED — too short and servos lag; too long and they over-stop.
-const unsigned long  KEYFRAME_INTERVAL_MS = 50;  // ms between streamed keyframes
-// Extra settle time (ms) after all servos report stopped at a pause boundary.
-const unsigned long  SETTLE_MS            = 50;
-// Dwell time (ms) applied at draw<->travel boundary keyframes (pause flag).
-const unsigned long  RETRACT_PAUSE_MS     = 500;
-// Timeout (ms) for waitForMotionComplete — safety valve so a stalled servo
-// does not hang the sketch forever.
-const unsigned long  MOTION_TIMEOUT_MS    = 8000;
+// --- Speeds (Dynamixel MOVING_SPEED units, roughly 0–300) -------------------
+// AX-12A:  1 unit ≈ 0.111 RPM    MX-64A:  1 unit ≈ 0.114 RPM
+const int HOME_SPEED              = 15;  // Homing and code-0 moves
+const int MANUAL_SPEED            = 15;  // Joint control menu (code 100)
+const int TRAJECTORY_SPEED        = 10;  // Streaming keyframes (555 mode)
+                                         //   Lower = slower = smoother blending
+const int TRAJECTORY_START_SPEED  = HOME_SPEED + 5;       // Move to first keyframe — gentle enough to avoid lurch
+const int SERVO4_TRAJECTORY_SPEED = 15;  // Joint 4 override — needs extra torque
+                                          // against gravity when arm is extended
+const int SERVO23_TRAJECTORY_SPEED = 20; // Joints 2/3 override — MX-64 shoulder pair,
+                                          // heaviest loaded joints; needs higher speed
+                                          // to avoid stalling under arm weight
+// --- Trajectory timing (ms) -------------------------------------------------
+const unsigned long MIN_STREAM_INTERVAL_MS = 20; // 555 mode: minimum inter-waypoint delay (ms).
+                                                  //   We preserve MoveIt's planned dt_ms whenever
+                                                  //   possible and only clamp extremely small gaps
+                                                  //   to keep serial update cadence reliable.
+const unsigned long SETTLE_MS            = 60;   // Extra wait after MOVING clears
+const unsigned long MOTION_TIMEOUT_MS    = 1200; // Hard timeout for waitForMotionComplete
+const unsigned long CORNER_TIMEOUT_MS    = 3000; // Longer timeout for sharp corner settles.
+const unsigned long CONTACT_PAUSE_MS     = 300;  // Dwell at each pen-lift / pen-plant boundary
+                                                  //   (pause==1 waypoints: retract and touch-down).
+const unsigned long PAUSE_POINT_MS       = 500; // Dwell (ms) when the arm reaches a user-defined
+                                                  //   pause=3 waypoint in the trajectory header.
+                                                  //   Set to any duration you need; exported via
+                                                  //   the PAUSE POINT tool in letterCoordinateMaker.
+const bool ENABLE_CORNER_FULL_STOPS      = true;  // pause=2 handling. true = full-stop at corners.
+const bool ENABLE_USER_PAUSE_POINTS       = true; // pause=3 handling. false = ignore pause=3 tags.
+const bool ENABLE_BIG_DELTA_CORNER_STOPS = true;  // Also stop for large direction changes without pause tags.
+const float BIG_DELTA_CORNER_RAD         = 0.10f; // ~5.7 deg threshold (joint-space max delta).
+const int MX_TRAJECTORY_GOAL_ACCEL       = 20;   // MX-64 Goal Acceleration (addr 73, Proto 1.0).
+                                                  //   Limits jerk at direction changes during
+                                                  //   trajectory playback.
 
-// Servo 1 (base) is AX-12A — compliance slope controls stiffness, not PID.
-// Softer slope = gentler approach to target = less bounce/overshoot.
-// Valid values: 2, 4, 8, 16, 32, 64, 128. Higher = softer.
-const int SERVO1_AX12_SLOPE      = 96;    // softer than default (32) — reduces oscillation
-
-// Per-servo compliance overrides for servo 4 (AX-12 with worst moment arm).
-// High load at a disadvantaged moment arm causes the servo to hunt:
-// it overshoots slightly, brakes, overshoots the other way, repeat.
-//
-// Slope controls the torque ramp around the target (higher = softer spring).
+// --- AX-12A compliance per servo -------------------------------------------
+// Slope: torque ramp near target. Higher = softer spring = less overshoot.
 //   Valid values: 2, 4, 8, 16, 32, 64, 128
-//   Higher slope = gentler approach = less snap-back jitter, but slightly
-//   less positional stiffness.  Start at 128 and tighten down if needed.
-//
-// Margin is the dead-zone (raw units) where zero torque is applied.
-//   0 = fight every tiny error (causes buzzing under load)
-//   2-4 = ignore sub-degree noise (stops the hunting loop)
-//   Don't go above ~5 or positional accuracy visibly degrades.
-const int SERVO4_AX12_SLOPE          = 64;  // middle ground: fast enough, soft enough
-const int SERVO4_AX12_MARGIN         = 3;   // wider dead-zone kills resonance-exciting micro-hunt
-// Servo 4 gets its own trajectory speed, higher than the global setting.
-// At speed 8 it lacks torque authority against gravity when the arm is
-// extended — the joint lags, then snaps/bounces to catch up.
-// A higher speed keeps torque output high enough to move decisively.
-const int SERVO4_TRAJECTORY_SPEED    = 15;
-// =============================================================================
+// Margin: dead-zone (raw encoder units) where zero torque is applied.
+//   0 = fight every micro-error (buzzing)   1-3 = typical   5+ = ignore noise
+// MX-64 (IDs 2, 3) are PID-controlled — slope/margin do not apply to them.
+struct ServoCompliance { uint8_t id; int slope; int margin; };
+const ServoCompliance SERVO_COMPLIANCE[] = {
+  // id  slope  margin
+  {  1,    32,     2  },  // AX-12A — base rotation
+  {  4,    32,     2  },  // AX-12A — elbow, wider margin damps gravity hunt
+  {  5,     32,     3  },  // AX-12A — wrist pitch
+  {  6,     32,     3  },  // AX-12A — wrist roll
+};
 
-// Per-motor calibration, mapping physical to logical angle ranges and offsets
+// --- Ready position (logical degrees, before each trajectory run) -----------
+// Recorded via limp-mode read.  The arm moves here before executing 555
+// so it starts from a known, safe intermediate pose.
+const float READY_J1 = 180.0f;
+const float READY_J2 = 215.0f;  // ID 3 is mirrored automatically to 360 - READY_J2
+const float READY_J4 =  60.0f;
+const float READY_J5 = 180.0f;
+const float READY_J6 = 225.0f;
+
+// --- Per-motor calibration --------------------------------------------------
+// physicalOffset: value added to shift logical 180° to the servo's physical zero.
+// lowerLimit / upperLimit: allowed logical angle range (degrees).
+// modelNumber: filled automatically on first use (0 = not yet read).
 struct RobotMotor {
-  uint8_t  id;            // Dynamixel ID
-  float    physicalOffset; // Physical zero offset used to align to logical 180deg
-  float    lowerLimit;    // Logical lower limit (deg)
-  float    upperLimit;    // Logical upper limit (deg)
-  uint16_t modelNumber;   // Cached on first use — avoids a bus read every move
+  uint8_t  id;
+  float    physicalOffset;
+  float    lowerLimit;
+  float    upperLimit;
+  uint16_t modelNumber;
 };
 
 RobotMotor motors[] = {
-  {1, 117.0, 120.0, 220.0, 0},
-  {2, 187.0, 120.0, 240.0, 0},  // MX-64A — Protocol 1.0, model 310
-  {3, 189.0, 120.0, 240.0, 0},  // MX-64A — Protocol 1.0, model 310
+  {1, 150.0, 120.0, 220.0, 0},
+  {2, 170.0, 120.0, 240.0, 0},  // MX-64A — Protocol 1.0, model 310
+  {3, 187.0, 120.0, 240.0, 0},  // MX-64A — Protocol 1.0, model 310
   {4, 150.0,  40.0, 240.0, 0},
   {5, 150.0, 100.0, 260.0, 0},
   {6, 150.0, 140.0, 300.0, 0}
 };
 
+// --- MoveIt <-> servo calibration -------------------------------------------
+// MOVEIT_HOME_RAD: MoveIt joint angle (rad) that maps to logical 180° on hardware.
+// MOVEIT_DIR_SIGN: +1 if MoveIt and servo angles increase in the same direction.
+// Order matches MOVEIT_TO_SERVO_ID: {J1, J2/3, J4, J5, J6}
 const uint8_t MOVEIT_TO_SERVO_ID[5] = {1, 2, 4, 5, 6};
+const float   MOVEIT_HOME_RAD[5]    = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+const float   MOVEIT_DIR_SIGN[5]    = {-1.0f, 1.0f, 1.0f, -1.0f, 1.0f};
 
-// MoveIt (radians) <-> logical (degrees) calibration.
-// Tune once on hardware; keep consistent with the MoveIt export tool.
-const float MOVEIT_HOME_RAD[5] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
-const float MOVEIT_DIR_SIGN[5] = {-1.0f, 1.0f, 1.0f, -1.0f, 1.0f};
+// =============================================================================
+
+// Move the pen servo from its current position to targetDeg over durationMs.
+// The servo is kept attached at all times so it holds position between calls.
+void penServoSweep(int targetDeg, unsigned long durationMs) {
+  penServo.attach(PEN_SERVO_PIN);
+  int startDeg = g_penServoDeg;
+  int delta = targetDeg - startDeg;
+  if (delta != 0) {
+    int steps = abs(delta);
+    unsigned long stepMs = durationMs / steps;
+    if (stepMs < 1) stepMs = 1;
+    int dir = (delta > 0) ? 1 : -1;
+    for (int i = 1; i <= steps; i++) {
+      penServo.write(startDeg + dir * i);
+      delay(stepMs);
+    }
+  }
+  // Always write and hold the final position — servo stays attached so it
+  // does not go limp between calls.
+  penServo.write(targetDeg);
+  g_penServoDeg = targetDeg;
+  delay(200);  // settle: give the servo time to physically reach the target
+}
+
+// Close the pen gripper (grab/writing position).
+void servoClose() {
+  penServoSweep(PEN_SERVO_GRAB_DEG, 500);
+  PC_SERIAL.println("Pen servo -> CLOSED");
+}
+
+// Open the pen gripper (home/release position).
+void servoOpen() {
+  penServoSweep(PEN_SERVO_HOME_DEG, 500);
+  PC_SERIAL.println("Pen servo -> OPEN");
+}
 
 // =============================================================================
 // UTILITIES
@@ -156,26 +189,6 @@ bool readPresentLogical(uint8_t id, float &logicalOut, float &physicalOut) {
 float moveitRadToLogical(uint8_t idx, float rad) {
   const float RAD2DEG = 57.2957795f;
   return 180.0f + MOVEIT_DIR_SIGN[idx] * (rad - MOVEIT_HOME_RAD[idx]) * RAD2DEG;
-}
-
-// =============================================================================
-// ALARM RECOVERY
-// =============================================================================
-
-// Clear ALARM_SHUTDOWN on every servo by cycling torque.
-// An AX-12A/MX-64 that tripped overload/thermal shuts its output but keeps
-// responding to pings — it silently ignores every goal-position write until
-// torque is cycled.  Call this on startup and before any trajectory run.
-void clearAlarms() {
-  uint8_t allIds[] = {1, 2, 3, 4, 5, 6};
-  PC_SERIAL.println("Clearing alarms (torque cycle)...");
-  for (uint8_t id : allIds) {
-    if (!d2a.ping(id)) continue;
-    d2a.torqueOff(id);
-    delay(20);
-    d2a.torqueOn(id);
-  }
-  PC_SERIAL.println("Alarms cleared.");
 }
 
 // =============================================================================
@@ -231,29 +244,24 @@ void scanServos() {
 // MOTION
 // =============================================================================
 
+// Apply the global SERVO_COMPLIANCE table to one servo.
+// AX-12A (model 12): writes CW/CCW slope and margin registers.
+// MX-64  (model 310): PID-controlled — compliance registers don't exist, skip.
 void applySmoothing(uint8_t id, uint16_t model) {
-  PC_SERIAL.print("  [applySmoothing] ID="); PC_SERIAL.print(id);
-  PC_SERIAL.print(" model="); PC_SERIAL.print(model);
-  if (model == 12) {
-    // AX-12: compliance slopes + margin
-    int slope  = 32;
-    int margin = 3;  // wider default dead-zone — reduces hunting on IDs 5 & 6 under end-effector load
-    if (id == 1) { slope = SERVO1_AX12_SLOPE; }
-    if (id == 4) { slope = SERVO4_AX12_SLOPE; margin = SERVO4_AX12_MARGIN; }
-    d2a.writeControlTableItem(CW_COMPLIANCE_SLOPE,   id, slope);
-    d2a.writeControlTableItem(CCW_COMPLIANCE_SLOPE,  id, slope);
-    d2a.writeControlTableItem(CW_COMPLIANCE_MARGIN,  id, margin);
-    d2a.writeControlTableItem(CCW_COMPLIANCE_MARGIN, id, margin);
-    PC_SERIAL.print(" | AX-12 slope="); PC_SERIAL.print(slope);
-    PC_SERIAL.print(" margin="); PC_SERIAL.println(margin);
-  } else if (model == 310) {
-    // MX-64 Protocol 1.0: MOVING_SPEED controls velocity.
-    // PID gains are at different register addresses in Protocol 1.0 vs 2.0 —
-    // leave them at hardware defaults to avoid mis-writing the wrong address.
-    PC_SERIAL.println(" | MX-64 Proto1 OK (default PID)");
-  } else {
-    PC_SERIAL.println(" | (unknown model — no smoothing applied)");
+  if (model != 12) return;  // MX-64: nothing to do
+  // Look up this servo in the table; use last entry as fallback.
+  int slope  = SERVO_COMPLIANCE[0].slope;
+  int margin = SERVO_COMPLIANCE[0].margin;
+  for (const ServoCompliance &c : SERVO_COMPLIANCE) {
+    if (c.id == id) { slope = c.slope; margin = c.margin; break; }
   }
+  d2a.writeControlTableItem(CW_COMPLIANCE_SLOPE,   id, slope);
+  d2a.writeControlTableItem(CCW_COMPLIANCE_SLOPE,  id, slope);
+  d2a.writeControlTableItem(CW_COMPLIANCE_MARGIN,  id, margin);
+  d2a.writeControlTableItem(CCW_COMPLIANCE_MARGIN, id, margin);
+  PC_SERIAL.print("  [compliance] ID="); PC_SERIAL.print(id);
+  PC_SERIAL.print(" slope="); PC_SERIAL.print(slope);
+  PC_SERIAL.print(" margin="); PC_SERIAL.println(margin);
 }
 
 // Convert physical degrees to the servo's raw bit value.
@@ -300,7 +308,12 @@ void prepareServosForTrajectory() {
     if (m && m->modelNumber == 0) m->modelNumber = d2a.getModelNumber(id);
     uint16_t model = m ? m->modelNumber : d2a.getModelNumber(id);
     applySmoothing(id, model);
-    int spd = (id == 4) ? SERVO4_TRAJECTORY_SPEED : TRAJECTORY_SPEED;
+    if (model == 310) {
+      d2a.writeControlTableItem(GOAL_ACCELERATION, id, MX_TRAJECTORY_GOAL_ACCEL);
+    }
+    int spd = (id == 4) ? SERVO4_TRAJECTORY_SPEED
+            : (id == 2 || id == 3) ? SERVO23_TRAJECTORY_SPEED
+            : TRAJECTORY_SPEED;
     d2a.writeControlTableItem(MOVING_SPEED, id, spd);  // AX-12A & MX-64 both use MOVING_SPEED
     d2a.torqueOn(id);
   }
@@ -319,18 +332,17 @@ bool isAnyServoMoving() {
   return false;
 }
 
-// Block until all servos have stopped (or timeout expires), then wait an
-// additional SETTLE_MS to let mechanical oscillation die out.
-void waitForMotionComplete() {
-  // Give servos a minimum startup window so the MOVING flag has time to assert.
-  delay(KEYFRAME_INTERVAL_MS);
-  unsigned long start = millis();
-  while ((millis() - start) < MOTION_TIMEOUT_MS) {
+// Block until all servos have stopped (MOVING flag clears), then wait SETTLE_MS.
+// Exits early after timeoutMs if the flag never clears.
+void waitForMotionComplete(unsigned long timeoutMs = MOTION_TIMEOUT_MS) {
+  // Short startup window so MOVING has time to assert after a goal write.
+  delay(40);
+
+  unsigned long hardLimit = millis() + timeoutMs;
+  while (millis() < hardLimit) {
     if (!isAnyServoMoving()) break;
-    delay(15);  // poll interval — low enough to be responsive, not so tight
-                // that it floods the bus
+    delay(10);
   }
-  // Extra settle time: absorbs resonance / micro-oscillations after stop.
   delay(SETTLE_MS);
 }
 
@@ -344,39 +356,34 @@ void sendGoalPosition(uint8_t id, float physicalDegrees) {
   d2a.setGoalPosition(id, physicalToRaw(model, physicalDegrees));
 }
 
-// Send goal positions to all 6 servos in a SINGLE Protocol 1.0 Sync Write
-// packet (instruction 0x83).  All AX-12 and MX-64A Protocol 1.0 servos share
-// the same GOAL_POSITION address (30) and data width (2 bytes), so they can
-// all be included in one packet — the bus carries one transaction instead of 6,
-// eliminating the ~1 ms stagger between joints that sequential writes produce.
+// Send goal positions to all 6 servos so they start moving simultaneously.
+//
+// Protocol 1.0 synchronous motion — REG_WRITE + ACTION:
+//   1. regWrite(id, ...) queues the goal position on each servo without moving.
+//   2. action(0xFE)  broadcasts a single packet that fires all queued moves
+//      at the same instant.  No motor starts until every motor has its target.
+//
+// This replaces sequential setGoalPosition() calls which caused visible
+// stagger (motor 1 starts, then 2, then 3...) because each write instantly
+// executed on that servo.
+//
+// Goal Position address for both AX-12A and MX-64 (Protocol 1.0): 30, 2 bytes.
 // physicals[] must be ordered: {ID1, ID2, ID3, ID4, ID5, ID6}.
 void syncAllGoalPositions(float physicals[6]) {
-  static const uint8_t  ids[6]    = {1, 2, 3, 4, 5, 6};
-  static const uint16_t GOAL_POS_ADDR   = 30;  // same for AX-12 & MX-64A Proto1
-  static const uint16_t GOAL_POS_LEN    = 2;
+  static const uint8_t ids[6] = {1, 2, 3, 4, 5, 6};
+  static const uint16_t GOAL_POS_ADDR = 30;  // same address on AX-12A and MX-64 (Proto 1)
 
-  uint16_t goals[6];
+  // Queue each servo's goal without triggering motion.
   for (int i = 0; i < 6; i++) {
     RobotMotor* m = findMotor(ids[i]);
     uint16_t model = m ? m->modelNumber : 12;
-    goals[i] = physicalToRaw(model, physicals[i]);
+    uint16_t raw = physicalToRaw(model, physicals[i]);
+    uint8_t data[2] = { (uint8_t)(raw & 0xFF), (uint8_t)(raw >> 8) };
+    d2a.regWrite(ids[i], GOAL_POS_ADDR, data, 2);
   }
 
-  DYNAMIXEL::InfoSyncWriteInst_t  sw_info;
-  DYNAMIXEL::XELInfoSyncWrite_t   xel_infos[6];
-
-  sw_info.addr             = GOAL_POS_ADDR;
-  sw_info.addr_length      = GOAL_POS_LEN;
-  sw_info.p_xels           = xel_infos;
-  sw_info.xel_count        = 6;
-  sw_info.is_info_changed  = true;
-
-  for (int i = 0; i < 6; i++) {
-    xel_infos[i].id     = ids[i];
-    xel_infos[i].p_data = (uint8_t*)&goals[i];
-  }
-
-  d2a.syncWrite(&sw_info);
+  // Fire all queued positions simultaneously.
+  d2a.action(0xFE);
 }
 
 // High-level: move a motor to a logical angle (deg).
@@ -403,7 +410,6 @@ void printMainMenu() {
   PC_SERIAL.println("  100 : Joint control menu (1,2,4,5,6,7)");
   PC_SERIAL.println("  200 : Limp/read mode (torque off, ENTER reads positions, 999 exits)");
   PC_SERIAL.println("  555 : Play trajectory (fixed speed)");
-  PC_SERIAL.println("  777 : Play MoveIt dynamic trajectory (velocity-aware)");
   PC_SERIAL.println("Enter code:");
 }
 
@@ -478,8 +484,16 @@ void jointControlMenu() {
     PC_SERIAL.print("  Locked: Joint "); PC_SERIAL.println(jointId);
 
     if (jointId == 7) {
-      // PWM hobby servo on pin 3 — DISABLED (Servo.h timer conflict)
-      PC_SERIAL.println("  Joint 7 (pen servo) disabled — Servo.h commented out.");
+      // PWM hobby servo on pin 3 (pen servo)
+      PC_SERIAL.println("  Enter angle for pen servo (0-180 deg, 999 to back):");
+      while (PC_SERIAL.available() == 0);
+      float penAngle = PC_SERIAL.parseFloat();
+      while (PC_SERIAL.available() > 0) PC_SERIAL.read();
+      if ((int)penAngle != 999) {
+        penAngle = constrain(penAngle, 0, 180);
+        penServoSweep((int)penAngle, 500);
+        PC_SERIAL.print("  Pen servo moved to "); PC_SERIAL.println(penAngle, 0);
+      }
     } else {
       // Dynamixel servo
       float logAngle = 180.0f, physAngle = 0.0f;
@@ -520,189 +534,175 @@ void jointControlMenu() {
   }
 }
 
-// 101: Home all motors to logical 180 deg
+// Pre-run ready position — recorded from limp-mode read.
+// The arm moves here before homing or before any trajectory run so it
+// starts from a known, safe intermediate pose rather than wherever it
+// last stopped.
+void goToReadyPosition() {
+  PC_SERIAL.println("Moving to ready position...");
+  setAngle(1, READY_J1, HOME_SPEED);
+  setAngle(2, READY_J2, HOME_SPEED);  // also mirrors ID 3 to 360-READY_J2
+  setAngle(4, READY_J4, HOME_SPEED);
+  setAngle(5, READY_J5, HOME_SPEED);
+  setAngle(6, READY_J6, HOME_SPEED);
+  waitForMotionComplete();
+  PC_SERIAL.println("Ready position reached.");
+}
+
+// 101: Home all motors to logical 180 deg.
+// If every joint is already within HOME_ALREADY_DEG of 180, skip the move entirely.
+// Otherwise, go to the READY position first so the arm never swings through an
+// NOTE: ID 3 is NOT commanded directly — setAngle(2,...) mirrors it automatically.
+const float HOME_ALREADY_DEG = 5.0f;  // tolerance to consider "already homed"
+
 void homeAllMotors() {
-  PC_SERIAL.println("Homing all motors to 180 (speed="  + String(HOME_SPEED) + ")...");
-  for (int i = 0; i < 6; i++) {
-    PC_SERIAL.print("  Homing motor ID="); PC_SERIAL.println(motors[i].id);
-    setAngle(motors[i].id, 180.0, HOME_SPEED);
+  uint8_t homeIds[] = {1, 2, 4, 5, 6};  // ID 3 is mirrored by setAngle(2)
+
+  // Check whether all joints are already near home.
+  bool alreadyHomed = true;
+  for (uint8_t id : homeIds) {
+    float logDeg = 0.0f, physDeg = 0.0f;
+    if (!readPresentLogical(id, logDeg, physDeg)) {
+      alreadyHomed = false;  // can't confirm — treat as not homed
+      break;
+    }
+    if (abs(logDeg - 180.0f) > HOME_ALREADY_DEG) {
+      alreadyHomed = false;
+      break;
+    }
   }
-  // Wait for all servos to settle before declaring homed.
+
+  if (alreadyHomed) {
+    PC_SERIAL.println("Already at home position — skipping home move.");
+    return;
+  }
+
+  PC_SERIAL.println("Homing all motors to 180 (speed=" + String(HOME_SPEED) + ")...");
+  for (uint8_t id : homeIds) {
+    PC_SERIAL.print("  Homing motor ID="); PC_SERIAL.println(id);
+    setAngle(id, 180.0, HOME_SPEED);
+  }
   waitForMotionComplete();
   PC_SERIAL.println("Homed.");
 }
 
 // 555: Play the exported MoveIt trajectory from trajectory_data.h
-void playMoveitTrajectory() {
-  PC_SERIAL.println("\n--- PLAYING TRAJECTORY ---");
-  if (kTrajectoryCount == 0) { PC_SERIAL.println("No trajectory points loaded."); return; }
 
-  // penServoSweep(PEN_SERVO_GRAB_DEG, 1000);  // DISABLED
-  // PC_SERIAL.println("Pen servo -> GRAB");
-
-  clearAlarms();
-  // Set speed, smoothing, and torque once for all servos before the loop.
-  prepareServosForTrajectory();
-
-  for (size_t i = 0; i < kTrajectoryCount; ++i) {
-    const JointSample &p = kTrajectory[i];
-
-    // Single sync-write packet: all 6 joints commanded simultaneously.
-    {
-      float physicals[6] = {
-        logicalToPhysical(1, moveitRadToLogical(0, p.j1_rad)),
-        logicalToPhysical(2, moveitRadToLogical(1, p.j2l_rad)),
-        logicalToPhysical(3, 360.0 - moveitRadToLogical(1, p.j2l_rad)),
-        logicalToPhysical(4, moveitRadToLogical(2, p.j4_rad)),
-        logicalToPhysical(5, moveitRadToLogical(3, p.j5_rad)),
-        logicalToPhysical(6, moveitRadToLogical(4, p.j6_rad))
-      };
-      syncAllGoalPositions(physicals);
-    }
-
-    if (p.pause == 1) {
-      // Boundary keyframe (pen lift / touch-down): wait for the arm to
-      // fully stop and settle before moving on, then dwell.
-      waitForMotionComplete();
-      PC_SERIAL.print("Boundary pause at keyframe "); PC_SERIAL.println(i);
-      delay(RETRACT_PAUSE_MS);
-    } else if (p.pause == 2) {
-      // Corner settle (draw-to-draw direction change): wait for full stop
-      // so the arm actually reaches the corner, then continue immediately.
-      waitForMotionComplete();
-      PC_SERIAL.print("Corner settle at keyframe "); PC_SERIAL.println(i);
-    } else {
-      // Streaming: fire the next keyframe after a fixed interval while the
-      // servos are still moving.  The internal velocity profile blends
-      // smoothly through each waypoint — no stop-start stepping.
-      delay(KEYFRAME_INTERVAL_MS);
-    }
-  }
-  PC_SERIAL.println("--- DONE ---");
-}
-
-// =============================================================================
-// 777: Play velocity-aware MoveIt dynamic trajectory from moveItData.h
-// =============================================================================
-
-// Convert a planned joint velocity (rad/s from MoveIt) to a Dynamixel
-// MOVING_SPEED register value, accounting for model-specific unit scales:
-//   Servos 1,4,5,6 — AX-12A  (model  12,  Protocol 1.0): 1 unit = 0.111 RPM ≈ 86.0 units/(rad/s)
-//   Servos 2,3     — MX-64   (model 310,  Protocol 1.0): 1 unit = 0.114 RPM ≈ 83.7 units/(rad/s)
-static uint16_t radsToSpeedUnits(float v_rads, uint16_t floor_speed, uint16_t model) {
-  float rtu = (model == 310) ? 83.7f : 86.0f;  // MX-64 vs AX-12A
-  uint16_t computed = (uint16_t)(fabsf(v_rads) * rtu);
-  uint16_t result = (computed > floor_speed) ? computed : floor_speed;
-  return (result < 300) ? result : 300;  // hard cap at 300 for safety
-}
-
-// Write the speed register for one servo.
-// AX-12A and MX-64 (Protocol 1.0) both use MOVING_SPEED.
-static void setServoSpeed(uint8_t id, uint16_t speed) {
-  d2a.writeControlTableItem(MOVING_SPEED, id, speed);
-}
-
-void playMoveitDynamicTrajectory() {
-  PC_SERIAL.println("\n--- PLAYING DYNAMIC TRAJECTORY (777) ---");
-  // penServoSweep(PEN_SERVO_GRAB_DEG, 1000);  // DISABLED
-  // PC_SERIAL.println("Pen servo -> GRAB");
-  clearAlarms();
-  if (kDynTrajectoryCount == 0) {
-    PC_SERIAL.println("No dynamic trajectory loaded. Run export tool with --output-moveit.");
-    return;
-  }
-
-  // --- Diagnostic dump ---
-  // Count pause boundaries and total planned duration so you can verify the
-  // loaded trajectory looks correct before the arm starts moving.
-  uint16_t pauseCount = 0;
-  uint32_t totalMs = 0;
-  for (size_t i = 0; i < kDynTrajectoryCount; ++i) {
-    if (kDynTrajectory[i].pause) pauseCount++;
-    totalMs += kDynTrajectory[i].dt_ms;
-  }
-  PC_SERIAL.print("  Waypoints loaded : "); PC_SERIAL.println(kDynTrajectoryCount);
-  PC_SERIAL.print("  Pause boundaries : "); PC_SERIAL.println(pauseCount);
-  PC_SERIAL.print("  Planned duration : "); PC_SERIAL.print(totalMs / 1000); PC_SERIAL.println(" s");
-  PC_SERIAL.print("  First dt_ms      : "); PC_SERIAL.println(kDynTrajectory[0].dt_ms);
-  PC_SERIAL.print("  Last  dt_ms      : "); PC_SERIAL.println(kDynTrajectory[kDynTrajectoryCount-1].dt_ms);
-  PC_SERIAL.println("--- STARTING ---");
+// Move all joints to the first keyframe of a trajectory at HOME_SPEED and
+// wait for full arrival before streaming begins.  Without this, the arm makes
+// a slow, uncoordinated crawl from wherever it stopped because the streaming
+// loop fires keyframes at TRAJECTORY_SPEED while the arm is still far from
+// the start position.
+void goToTrajectoryStart(float physicals[6]) {
+  PC_SERIAL.println("Moving to trajectory start position...");
   uint8_t allIds[] = {1, 2, 3, 4, 5, 6};
   for (uint8_t id : allIds) {
     RobotMotor* m = findMotor(id);
     if (m && m->modelNumber == 0) m->modelNumber = d2a.getModelNumber(id);
-    uint16_t model = m ? m->modelNumber : d2a.getModelNumber(id);
-    applySmoothing(id, model);
+    d2a.writeControlTableItem(MOVING_SPEED, id, TRAJECTORY_START_SPEED);
     d2a.torqueOn(id);
   }
+  syncAllGoalPositions(physicals);
+  waitForMotionComplete();
+  PC_SERIAL.println("At trajectory start.");
+}
 
-  for (size_t i = 0; i < kDynTrajectoryCount; ++i) {
-    const MoveitDynamicSample &p = kDynTrajectory[i];
+void playMoveitTrajectory() {
+  PC_SERIAL.println("\n--- PLAYING TRAJECTORY (555) ---");
+  if (kTrajectoryCount == 0) { PC_SERIAL.println("No trajectory points loaded."); return; }
 
-    // --- Per-keyframe speed (from MoveIt planned velocities) ---
-    // Servo 4 gets a higher floor because it fights gravity at the worst
-    // moment arm — too low and it stalls before reaching the target.
-    // Model numbers are cached in motors[].modelNumber so the right
-    // unit scale is used for each servo protocol (see radsToSpeedUnits).
-    // Model numbers are cached during the setup loop above — these fallbacks
-    // match the known hardware in case a servo didn't respond to getModelNumber.
-    uint16_t m1  = findMotor(1) ? findMotor(1)->modelNumber : 12;   // AX-12A
-    uint16_t m2  = findMotor(2) ? findMotor(2)->modelNumber : 310;  // MX-64
-    uint16_t m4  = findMotor(4) ? findMotor(4)->modelNumber : 12;   // AX-12A
-    uint16_t m5  = findMotor(5) ? findMotor(5)->modelNumber : 12;   // AX-12A
-    uint16_t m6  = findMotor(6) ? findMotor(6)->modelNumber : 12;   // AX-12A
-    uint16_t spd1 = radsToSpeedUnits(p.v1_rads,  5,                    m1);
-    uint16_t spd2 = radsToSpeedUnits(p.v2l_rads, 5,                    m2);
-    uint16_t spd4 = radsToSpeedUnits(p.v4_rads,  SERVO4_TRAJECTORY_SPEED, m4);
-    uint16_t spd5 = radsToSpeedUnits(p.v5_rads,  5,                    m5);
-    uint16_t spd6 = radsToSpeedUnits(p.v6_rads,  5,                    m6);
+  prepareServosForTrajectory();
 
-    // Timestamp before bus writes so we can subtract the overhead from
-    // the inter-keyframe delay (each waypoint fires ~11 serial transactions
-    // at 1 Mbaud ≈ 1-3 ms, making delays consistently late without this).
-    unsigned long t_write_start = millis();
-
-    setServoSpeed(1, spd1);
-    setServoSpeed(2, spd2);
-    setServoSpeed(3, spd2);  // mirrored joint shares velocity magnitude
-    setServoSpeed(4, spd4);
-    setServoSpeed(5, spd5);
-    setServoSpeed(6, spd6);
-
-    // Single sync-write packet: all 6 joints commanded simultaneously.
-    {
-      float physicals[6] = {
-        logicalToPhysical(1, moveitRadToLogical(0, p.j1_rad)),
-        logicalToPhysical(2, moveitRadToLogical(1, p.j2l_rad)),
-        logicalToPhysical(3, 360.0 - moveitRadToLogical(1, p.j2l_rad)),
-        logicalToPhysical(4, moveitRadToLogical(2, p.j4_rad)),
-        logicalToPhysical(5, moveitRadToLogical(3, p.j5_rad)),
-        logicalToPhysical(6, moveitRadToLogical(4, p.j6_rad))
-      };
-      syncAllGoalPositions(physicals);
-    }
-
-    // --- Timing ---
-    // At pause boundaries (pen lift/plant) wait for full stop + settle.
-    // At draw-to-draw corners (pause==2) wait for full stop but no dwell.
-    // Between normal waypoints, delay exactly MoveIt's planned dt minus the
-    // time already spent on bus writes, so the total cycle matches the plan.
-    if (p.pause == 1) {
-      waitForMotionComplete();
-      PC_SERIAL.print("Boundary pause at keyframe "); PC_SERIAL.println(i);
-      delay(RETRACT_PAUSE_MS);
-    } else if (p.pause == 2) {
-      // Corner settle: arm must fully reach the corner before changing direction.
-      waitForMotionComplete();
-      PC_SERIAL.print("Corner settle at keyframe "); PC_SERIAL.println(i);
-    } else {
-      unsigned long elapsed = millis() - t_write_start;
-      if (p.dt_ms > (uint16_t)(elapsed + 1)) {
-        delay(p.dt_ms - (uint16_t)elapsed);
-      }
-      // If bus writes took >= dt_ms, skip the delay — don't fall further behind.
-    }
+  // Move to first keyframe at fast speed, wait for full arrival.
+  {
+    const JointSample &p0 = kTrajectory[0];
+    float firstFrame[6] = {
+      logicalToPhysical(1, moveitRadToLogical(0, p0.j1_rad)),
+      logicalToPhysical(2, moveitRadToLogical(1, p0.j2l_rad)),
+      logicalToPhysical(3, 360.0 - moveitRadToLogical(1, p0.j2l_rad)),
+      logicalToPhysical(4, moveitRadToLogical(2, p0.j4_rad)),
+      logicalToPhysical(5, moveitRadToLogical(3, p0.j5_rad)),
+      logicalToPhysical(6, moveitRadToLogical(4, p0.j6_rad))
+    };
+    goToTrajectoryStart(firstFrame);
   }
+  prepareServosForTrajectory();  // restore drawing speed
+
+  // Marker has just touched the board — begin drawing immediately.
+  PC_SERIAL.println("--- STARTING ---");
+
+  bool previousWasPauseTag = false;  // collapse consecutive pause-tagged waypoints
+
+  for (size_t i = 0; i < kTrajectoryCount; ++i) {
+    const JointSample &p = kTrajectory[i];
+    float physicals[6] = {
+      logicalToPhysical(1, moveitRadToLogical(0, p.j1_rad)),
+      logicalToPhysical(2, moveitRadToLogical(1, p.j2l_rad)),
+      logicalToPhysical(3, 360.0 - moveitRadToLogical(1, p.j2l_rad)),
+      logicalToPhysical(4, moveitRadToLogical(2, p.j4_rad)),
+      logicalToPhysical(5, moveitRadToLogical(3, p.j5_rad)),
+      logicalToPhysical(6, moveitRadToLogical(4, p.j6_rad))
+    };
+
+    const bool isPauseTag = (p.pause > 0);
+    const bool executePauseHere = isPauseTag && !previousWasPauseTag;
+
+    bool virtualCornerStop = false;
+    if (ENABLE_BIG_DELTA_CORNER_STOPS && i > 0 && p.pause == 0) {
+      const JointSample &prev = kTrajectory[i - 1];
+      float maxDelta = fabsf(p.j1_rad  - prev.j1_rad);
+      float d = fabsf(p.j2l_rad - prev.j2l_rad); if (d > maxDelta) maxDelta = d;
+      d = fabsf(p.j4_rad  - prev.j4_rad);        if (d > maxDelta) maxDelta = d;
+      d = fabsf(p.j5_rad  - prev.j5_rad);        if (d > maxDelta) maxDelta = d;
+      d = fabsf(p.j6_rad  - prev.j6_rad);        if (d > maxDelta) maxDelta = d;
+      virtualCornerStop = (maxDelta >= BIG_DELTA_CORNER_RAD);
+    }
+
+    if (p.pause == 1 && executePauseHere) {
+      // Pen-lift / touch-down boundary: reach target, settle, then dwell.
+      syncAllGoalPositions(physicals);
+      waitForMotionComplete();
+      PC_SERIAL.print("Pen boundary at keyframe "); PC_SERIAL.println(i);
+      delay(CONTACT_PAUSE_MS);
+    } else if ((p.pause == 2 && executePauseHere) || virtualCornerStop) {
+      // Draw-to-draw corner. Full-stop mode is optional because it can be slow
+      // if MOVING flags remain asserted under load.
+      syncAllGoalPositions(physicals);
+      if (ENABLE_CORNER_FULL_STOPS) {
+        waitForMotionComplete(CORNER_TIMEOUT_MS);
+        PC_SERIAL.print("Corner settle at keyframe "); PC_SERIAL.println(i);
+      } else {
+        unsigned long interval = (p.dt_ms > MIN_STREAM_INTERVAL_MS) ? p.dt_ms : MIN_STREAM_INTERVAL_MS;
+        delay(interval);
+      }
+    } else if (p.pause == 3 && executePauseHere) {
+      // User-defined pause point can be disabled globally for speed/debugging.
+      syncAllGoalPositions(physicals);
+      if (ENABLE_USER_PAUSE_POINTS) {
+        waitForMotionComplete();
+        PC_SERIAL.print("User pause at keyframe "); PC_SERIAL.println(i);
+        delay(PAUSE_POINT_MS);
+      } else {
+        unsigned long interval = (p.dt_ms > MIN_STREAM_INTERVAL_MS) ? p.dt_ms : MIN_STREAM_INTERVAL_MS;
+        delay(interval);
+      }
+    } else {
+      // Normal waypoint OR collapsed back-to-back pause tag:
+      // preserve MoveIt-planned dt_ms; only clamp tiny gaps.
+      unsigned long interval = (p.dt_ms > MIN_STREAM_INTERVAL_MS) ? p.dt_ms : MIN_STREAM_INTERVAL_MS;
+      unsigned long t0 = millis();
+      syncAllGoalPositions(physicals);
+      unsigned long elapsed = millis() - t0;
+      if (interval > elapsed) delay(interval - elapsed);
+    }
+
+    previousWasPauseTag = isPauseTag;
+  }
+
+  // Wait for the last move to fully complete before the arm homes.
+  waitForMotionComplete();
+  PC_SERIAL.println("End of stroke — trajectory complete.");
+
   PC_SERIAL.println("--- DONE ---");
 }
 
@@ -715,15 +715,14 @@ void setup() {
 
   PC_SERIAL.println("--- SYSTEM INITIALIZED ---");
   scanServos();
-  clearAlarms();
   homeAllMotors();
   scanServos();  // second scan: confirm registers after homing write
 
-  // Set initial pen servo position — DISABLED (Servo.h timer conflict)
-  // penServoSweep(PEN_SERVO_HOME_DEG, 0);
-  // PC_SERIAL.println("Pen servo (ID 7, pin 3) set to " + String(PEN_SERVO_HOME_DEG) + " deg.");
-
+  // Assume servo is at GRAB (worst case) so the open sweep always runs.
+  g_penServoDeg = PEN_SERVO_GRAB_DEG;
+  servoOpen();  // sweeps from GRAB -> HOME, holds position
   printMainMenu();
+  homeAllMotors();
 }
 
 void loop() {
@@ -733,18 +732,16 @@ void loop() {
 
     if (inputCode == 0) {
       homeAllMotors();
+      servoOpen();
     } else if (inputCode == 100) {
       jointControlMenu();
     } else if (inputCode == 200) {
       limpReadMode();
     } else if (inputCode == 555) {
+      servoClose();
       playMoveitTrajectory();
       homeAllMotors();
-      // penServoSweep(PEN_SERVO_HOME_DEG, 1000);  // DISABLED
-    } else if (inputCode == 777) {
-      playMoveitDynamicTrajectory();
-      homeAllMotors();
-      // penServoSweep(PEN_SERVO_HOME_DEG, 1000);  // DISABLED
+      servoOpen();
     } else {
       PC_SERIAL.println("Invalid input.");
     }
